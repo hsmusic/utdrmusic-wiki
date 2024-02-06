@@ -224,7 +224,9 @@ body {
 }
 
 body::before {
-  background-image: url("../media/bg.jpg");
+  background-image: url("../media/bg.png");
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
   background-position: center;
   background-size: cover;
   opacity: 0.5;
