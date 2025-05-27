@@ -5,7 +5,7 @@
     "type": "module",
     "main": "src/upd8.js",
     "bin": {
-        "hsmusic": "./src/upd8.js"
+        "utdrmusic": "./src/upd8.js"
     },
     "scripts": {
         "test": "tap",
