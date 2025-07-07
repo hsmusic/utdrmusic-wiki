@@ -4,6 +4,7 @@ export default {
   contentDependencies: [
     'generateAdditionalNamesBox',
     'generateCommentaryEntry',
+    'generateContentContentHeading',
     'generateContentHeading',
     'generateContributionList',
     'generateFlashActSidebar',
@@ -53,6 +54,9 @@ export default {
     contentHeading:
       relation('generateContentHeading'),
 
+    contentContentHeading:
+      relation('generateContentContentHeading', flash),
+
     flashActLink:
       relation('linkFlashAct', flash.act),
 
@@ -70,7 +74,7 @@ export default {
         .map(entry => relation('generateCommentaryEntry', entry)),
 
     creditSourceEntries:
-      flash.commentary
+      flash.creditingSources
         .map(entry => relation('generateCommentaryEntry', entry)),
   }),
 
@@ -168,20 +172,20 @@ export default {
           ]),
 
           html.tags([
-            relations.contentHeading.clone()
+            relations.contentContentHeading.clone()
               .slots({
                 attributes: {id: 'artist-commentary'},
-                title: language.$('misc.artistCommentary'),
+                string: 'misc.artistCommentary',
               }),
 
             relations.artistCommentaryEntries,
           ]),
 
           html.tags([
-            relations.contentHeading.clone()
+            relations.contentContentHeading.clone()
               .slots({
                 attributes: {id: 'crediting-sources'},
-                title: language.$('misc.creditingSources'),
+                string: 'misc.creditingSources',
               }),
 
             relations.creditSourceEntries,

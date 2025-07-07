@@ -8,7 +8,7 @@
 import * as marked from 'marked';
 
 import * as html from '#html';
-import {escapeRegex, typeAppearance} from '#sugar';
+import {empty, escapeRegex, typeAppearance} from '#sugar';
 import {matchMarkdownLinks} from '#wiki-data';
 
 export const replacerSpec = {
@@ -464,7 +464,7 @@ export function squashBackslashes(text) {
   // a set of characters where the backslash carries meaning
   // into later formatting (i.e. markdown). Note that we do
   // NOT compress double backslashes into single backslashes.
-  return text.replace(/([^\\](?:\\{2})*)\\(?![\\*_~>-])/g, '$1');
+  return text.replace(/([^\\](?:\\{2})*)\\(?![\\*_~>.-])/g, '$1');
 }
 
 export function restoreRawHTMLTags(text) {
@@ -526,6 +526,7 @@ export function postprocessComments(inputNodes) {
 
 function postprocessHTMLTags(inputNodes, tagName, callback) {
   const outputNodes = [];
+  const errors = [];
 
   const lastNode = inputNodes.at(-1);
 
@@ -593,10 +594,16 @@ function postprocessHTMLTags(inputNodes, tagName, callback) {
           return false;
         })();
 
-        outputNodes.push(
-          callback(attributes, {
-            inline,
-          }));
+        try {
+          outputNodes.push(
+            callback(attributes, {
+              inline,
+            }));
+        } catch (caughtError) {
+          errors.push(new Error(
+            `Failed to process ${match[0]}`,
+            {cause: caughtError}));
+        }
 
         // No longer at the start of a line after the tag - there will at
         // least be text with only '\n' before the next of this tag that's
@@ -619,7 +626,23 @@ function postprocessHTMLTags(inputNodes, tagName, callback) {
     outputNodes.push(node);
   }
 
+  if (!empty(errors)) {
+    throw new AggregateError(
+      errors,
+    `Errors postprocessing <${tagName}> tags`);
+  }
+
   return outputNodes;
+}
+
+function complainAboutMediaSrc(src) {
+  if (!src) {
+    throw new Error(`Missing "src" attribute`);
+  }
+
+  if (src.startsWith('/media/')) {
+    throw new Error(`Start "src" with "media/", not "/media/"`);
+  }
 }
 
 export function postprocessImages(inputNodes) {
@@ -628,6 +651,8 @@ export function postprocessImages(inputNodes) {
       const node = {type: 'image'};
 
       node.src = attributes.get('src');
+      complainAboutMediaSrc(node.src);
+
       node.inline = attributes.get('inline') ?? inline;
 
       if (attributes.get('link')) node.link = attributes.get('link');
@@ -648,10 +673,13 @@ export function postprocessImages(inputNodes) {
 
 export function postprocessVideos(inputNodes) {
   return postprocessHTMLTags(inputNodes, 'video',
-    attributes => {
+    (attributes, {inline}) => {
       const node = {type: 'video'};
 
       node.src = attributes.get('src');
+      complainAboutMediaSrc(node.src);
+
+      node.inline = attributes.get('inline') ?? inline;
 
       if (attributes.get('width')) node.width = parseInt(attributes.get('width'));
       if (attributes.get('height')) node.height = parseInt(attributes.get('height'));
@@ -668,8 +696,12 @@ export function postprocessAudios(inputNodes) {
       const node = {type: 'audio'};
 
       node.src = attributes.get('src');
+      complainAboutMediaSrc(node.src);
+
       node.inline = attributes.get('inline') ?? inline;
+
       if (attributes.get('align')) node.align = attributes.get('align');
+      if (attributes.get('nameless')) node.nameless = true;
 
       return node;
     });
@@ -821,54 +853,108 @@ export function postprocessExternalLinks(inputNodes) {
   return outputNodes;
 }
 
-export function parseContentNodes(input) {
+export function parseContentNodes(input, {
+  errorMode = 'throw',
+} = {}) {
   if (typeof input !== 'string') {
     throw new TypeError(`Expected input to be string, got ${typeAppearance(input)}`);
   }
 
-  try {
-    let output = parseNodes(input, 0);
-    output = postprocessComments(output);
-    output = postprocessImages(output);
-    output = postprocessVideos(output);
-    output = postprocessAudios(output);
-    output = postprocessHeadings(output);
-    output = postprocessSummaries(output);
-    output = postprocessExternalLinks(output);
-    return output;
-  } catch (errorNode) {
-    if (errorNode.type !== 'error') {
-      throw errorNode;
+  let result = null, error = null;
+
+  process: {
+    try {
+      result = parseNodes(input, 0);
+    } catch (caughtError) {
+      if (caughtError.type === 'error') {
+        const {i, data: {message}} = caughtError;
+
+        let lineStart = input.slice(0, i).lastIndexOf('\n');
+        if (lineStart >= 0) {
+          lineStart += 1;
+        } else {
+          lineStart = 0;
+        }
+
+        let lineEnd = input.slice(i).indexOf('\n');
+        if (lineEnd >= 0) {
+          lineEnd += i;
+        } else {
+          lineEnd = input.length;
+        }
+
+        const line = input.slice(lineStart, lineEnd);
+
+        const cursor = i - lineStart;
+
+        error =
+          new SyntaxError(
+            `Parse error (at pos ${i}): ${message}\n` +
+            line + `\n` +
+            '-'.repeat(cursor) + '^');
+      } else {
+        error = caughtError;
+      }
+
+      // A parse error means there's no output to continue with at all,
+      // so stop here.
+      break process;
     }
 
-    const {
-      i,
-      data: {message},
-    } = errorNode;
+    const postprocessErrors = [];
 
-    let lineStart = input.slice(0, i).lastIndexOf('\n');
-    if (lineStart >= 0) {
-      lineStart += 1;
+    for (const postprocess of [
+      postprocessComments,
+      postprocessImages,
+      postprocessVideos,
+      postprocessAudios,
+      postprocessHeadings,
+      postprocessSummaries,
+      postprocessExternalLinks,
+    ]) {
+      try {
+        result = postprocess(result);
+      } catch (caughtError) {
+        const error =
+          new Error(
+            `Error in step ${`"${postprocess.name}"`}`,
+            {cause: caughtError});
+
+        error[Symbol.for('hsmusic.aggregate.translucent')] = true;
+
+        postprocessErrors.push(error);
+      }
+    }
+
+    if (!empty(postprocessErrors)) {
+      error =
+        new AggregateError(
+          postprocessErrors,
+        `Errors postprocessing content text`);
+
+      error[Symbol.for('hsmusic.aggregate.translucent')] = 'single';
+    }
+  }
+
+  if (errorMode === 'throw') {
+    if (error) {
+      throw error;
     } else {
-      lineStart = 0;
+      return result;
+    }
+  } else if (errorMode === 'return') {
+    if (!result) {
+      result = [{
+        i: 0,
+        iEnd: input.length,
+        type: 'text',
+        data: input,
+      }];
     }
 
-    let lineEnd = input.slice(i).indexOf('\n');
-    if (lineEnd >= 0) {
-      lineEnd += i;
-    } else {
-      lineEnd = input.length;
-    }
-
-    const line = input.slice(lineStart, lineEnd);
-
-    const cursor = i - lineStart;
-
-    throw new SyntaxError([
-      `Parse error (at pos ${i}): ${message}`,
-      line,
-      '-'.repeat(cursor) + '^',
-    ].join('\n'));
+    return {error, result};
+  } else {
+    throw new Error(`Unknown errorMode ${errorMode}`);
   }
 }
 

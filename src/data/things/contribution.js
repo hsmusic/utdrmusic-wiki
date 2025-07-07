@@ -5,10 +5,18 @@ import {colors} from '#cli';
 import {input} from '#composite';
 import {empty} from '#sugar';
 import Thing from '#thing';
-import {isStringNonEmpty, isThing, validateReference} from '#validators';
+import {isBoolean, isStringNonEmpty, isThing, validateReference}
+  from '#validators';
 
-import {exitWithoutDependency, exposeDependency} from '#composite/control-flow';
 import {flag, simpleDate, soupyFind} from '#composite/wiki-properties';
+
+import {
+  exitWithoutDependency,
+  exposeConstant,
+  exposeDependency,
+  exposeDependencyOrContinue,
+  exposeUpdateValueOrContinue,
+} from '#composite/control-flow';
 
 import {
   withFilteredList,
@@ -70,7 +78,26 @@ export class Contribution extends Thing {
         property: input.thisProperty(),
       }),
 
-      flag(true),
+      exposeUpdateValueOrContinue({
+        validate: input.value(isBoolean),
+      }),
+
+      {
+        dependencies: ['thing', input.myself()],
+        compute: (continuation, {
+          ['thing']: thing,
+          [input.myself()]: contribution,
+        }) =>
+          (thing.countOwnContributionInContributionTotals?.(contribution)
+            ? true
+         : thing.countOwnContributionInContributionTotals
+            ? false
+            : continuation()),
+      },
+
+      exposeConstant({
+        value: input.value(true),
+      }),
     ],
 
     countInDurationTotals: [
@@ -78,7 +105,37 @@ export class Contribution extends Thing {
         property: input.thisProperty(),
       }),
 
-      flag(true),
+      exposeUpdateValueOrContinue({
+        validate: input.value(isBoolean),
+      }),
+
+      withPropertyFromObject({
+        object: 'thing',
+        property: input.value('duration'),
+      }),
+
+      exitWithoutDependency({
+        dependency: '#thing.duration',
+        mode: input.value('falsy'),
+        value: input.value(false),
+      }),
+
+      {
+        dependencies: ['thing', input.myself()],
+        compute: (continuation, {
+          ['thing']: thing,
+          [input.myself()]: contribution,
+        }) =>
+          (thing.countOwnContributionInDurationTotals?.(contribution)
+            ? true
+         : thing.countOwnContributionInDurationTotals
+            ? false
+            : continuation()),
+      },
+
+      exposeConstant({
+        value: input.value(true),
+      }),
     ],
 
     // Update only
@@ -236,6 +293,21 @@ export class Contribution extends Thing {
 
       exposeDependency({
         dependency: '#nearbyItem',
+      }),
+    ],
+
+    groups: [
+      withPropertyFromObject({
+        object: 'thing',
+        property: input.value('groups'),
+      }),
+
+      exposeDependencyOrContinue({
+        dependency: '#thing.groups',
+      }),
+
+      exposeConstant({
+        value: input.value([]),
       }),
     ],
   });

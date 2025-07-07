@@ -56,11 +56,14 @@ export function processAvailableMatchesByName(data, {
         if (normalizedName in multipleNameMatches) {
           multipleNameMatches[normalizedName].push(thing);
         } else {
-          multipleNameMatches[normalizedName] = [results[normalizedName], thing];
+          multipleNameMatches[normalizedName] = [
+            results[normalizedName].thing,
+            thing,
+          ];
           results[normalizedName] = null;
         }
       } else {
-        results[normalizedName] = thing;
+        results[normalizedName] = {thing, name};
       }
     }
   }
@@ -87,7 +90,7 @@ export function processAvailableMatchesByDirectory(data, {
         continue;
       }
 
-      results[directory] = thing;
+      results[directory] = {thing, directory};
     }
   }
 
@@ -117,13 +120,50 @@ function oopsMultipleNameMatches(mode, {
     `Returning null for this reference.`);
 }
 
+function oopsNameCapitalizationMismatch(mode, {
+  matchingName,
+  matchedName,
+}) {
+  if (matchingName.length === matchedName.length) {
+    let a = '', b = '';
+    for (let i = 0; i < matchingName.length; i++) {
+      if (
+        matchingName[i] === matchedName[i] ||
+        matchingName[i].toLowerCase() !== matchingName[i].toLowerCase()
+      ) {
+        a += matchingName[i];
+        b += matchedName[i];
+      } else {
+        a += colors.bright(colors.red(matchingName[i]));
+        b += colors.bright(colors.green(matchedName[i]));
+      }
+    }
+
+    matchingName = a;
+    matchedName = b;
+  }
+
+  return warnOrThrow(mode,
+    `Provided capitalization differs from the matched name. Please resolve:\n` +
+    `- provided: ${matchingName}\n` +
+    `- should be: ${matchedName}\n` +
+    `Returning null for this reference.`);
+}
+
 export function prepareMatchByName(mode, {byName, multipleNameMatches}) {
   return (name) => {
     const normalizedName = name.toLowerCase();
     const match = byName[normalizedName];
 
     if (match) {
-      return match;
+      if (name === match.name) {
+        return match.thing;
+      } else {
+        return oopsNameCapitalizationMismatch(mode, {
+          matchingName: name,
+          matchedName: match.name,
+        });
+      }
     } else if (multipleNameMatches[normalizedName]) {
       return oopsMultipleNameMatches(mode, {
         name,
@@ -154,7 +194,13 @@ export function prepareMatchByDirectory(mode, {referenceTypes, byDirectory}) {
       });
     }
 
-    return byDirectory[directory];
+    const match = byDirectory[directory];
+
+    if (match) {
+      return match.thing;
+    } else {
+      return null;
+    }
   };
 }
 
@@ -345,7 +391,13 @@ function findMixedHelper(config) {
           });
         }
 
-        return byDirectory[referenceType][directory];
+        const match = byDirectory[referenceType][directory];
+
+        if (match) {
+          return match.thing;
+        } else {
+          return null;
+        }
       },
 
       matchByName:

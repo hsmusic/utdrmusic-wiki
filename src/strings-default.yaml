@@ -492,7 +492,8 @@ misc:
   # artistCommentary:
 
   artistCommentary:
-    _: "Artist commentary:"
+    _: "Artist commentary for {THING}:"
+    sticky: "Artist commentary:"
 
     entry:
       title:
@@ -519,13 +520,10 @@ misc:
 
     info:
       fromMainRelease: >-
-        This commentary is properly placed on this track's main release, {ALBUM}.
+        The following commentary is properly placed on this track's main release, {ALBUM}.
 
       fromMainRelease.namedDifferently: >-
-        This commentary is properly placed on this track's main release, {ALBUM}, where it's named {NAME}.
-
-      releaseSpecific: >-
-        This commentary is specific to this release, {ALBUM}.
+        The following commentary is properly placed on this track's main release, {ALBUM}, where it's named {NAME}.
 
       seeSpecificReleases: >-
         For release-specific commentary, check out: {ALBUMS}.
@@ -623,7 +621,8 @@ misc:
       onlyIndex: "Only"
 
   creditingSources:
-    _: "Crediting sources:"
+    _: "Crediting sources for {THING}:"
+    sticky: "Crediting sources:"
 
   # external:
   #   Links which will generally bring you somewhere off of the wiki.
@@ -651,7 +650,12 @@ misc:
     amazonMusic: "Amazon Music"
     appleMusic: "Apple Music"
     artstation: "ArtStation"
-    bandcamp: "Bandcamp"
+
+    bandcamp:
+      _: "Bandcamp"
+
+      composerRelease: "Bandcamp (composer's release)"
+      officialRelease: "Bandcamp (official release)"
 
     bgreco:
       _: "bgreco.net"
@@ -843,7 +847,8 @@ misc:
       track: "Tracks"
 
   referencingSources:
-    _: "Referencing sources:"
+    _: "Referencing sources for {THING}:"
+    sticky: "Referencing sources:"
 
   # skippers:
   #
@@ -1329,6 +1334,16 @@ artistPage:
 
       flash:
         _: "{FLASH}"
+
+      artwork.accent:
+        withLabel: >-
+          {LABEL}
+
+        withAnnotation: >-
+          {ANNOTATION}
+
+        withLabel.withAnnotation: >-
+          {LABEL}: {ANNOTATION}
 
   # contributedDurationLine:
   #   This is shown at the top of the artist's track list, provided
@@ -2446,6 +2461,8 @@ trackPage:
     random: "Random"
 
     backToTrack: "Return to track page"
+
+    singleAccent: "single"
 
     track:
       _: "{TRACK}"

@@ -116,6 +116,10 @@ export function findIndexOrEnd(array, fn) {
 // returns null (or values in the array are nullish), they'll just be skipped in
 // the sum.
 export function accumulateSum(array, fn = x => x) {
+  if (!Array.isArray(array)) {
+    return accumulateSum(Array.from(array, fn));
+  }
+
   return array.reduce(
     (accumulator, value, index, array) =>
       accumulator +
@@ -254,11 +258,20 @@ export function compareObjects(obj1, obj2, {
 
 // Stolen from jq! Which pro8a8ly stole the concept from other places. Nice.
 export const withEntries = (obj, fn) => {
-  const result = fn(Object.entries(obj));
-  if (result instanceof Promise) {
-    return result.then(entries => Object.fromEntries(entries));
+  if (obj instanceof Map) {
+    const result = fn(Array.from(obj.entries()));
+    if (result instanceof Promise) {
+      return result.then(entries => new map(entries));
+    } else {
+      return new Map(result);
+    }
   } else {
-    return Object.fromEntries(result);
+    const result = fn(Object.entries(obj));
+    if (result instanceof Promise) {
+      return result.then(entries => Object.fromEntries(entries));
+    } else {
+      return Object.fromEntries(result);
+    }
   }
 }
 
@@ -302,34 +315,74 @@ export function filterProperties(object, properties, {
   return filteredObject;
 }
 
-export function queue(array, max = 50) {
-  if (max === 0) {
-    return array.map((fn) => fn());
+export function queue(functionList, queueSize = 50) {
+  if (queueSize === 0) {
+    return functionList.map(fn => fn());
   }
 
-  const begin = [];
-  let current = 0;
-  const ret = array.map(
-    (fn) =>
-      new Promise((resolve, reject) => {
-        begin.push(() => {
-          current++;
-          Promise.resolve(fn()).then((value) => {
-            current--;
-            if (current < max && begin.length) {
-              begin.shift()();
-            }
-            resolve(value);
-          }, reject);
-        });
-      })
-  );
+  const promiseList = [];
+  const resolveList = [];
+  const rejectList = [];
 
-  for (let i = 0; i < max && begin.length; i++) {
-    begin.shift()();
+  for (let i = 0; i < functionList.length; i++) {
+    const promiseWithResolvers = Promise.withResolvers();
+    promiseList.push(promiseWithResolvers.promise);
+    resolveList.push(promiseWithResolvers.resolve);
+    rejectList.push(promiseWithResolvers.reject);
   }
 
-  return ret;
+  let cursor = 0;
+  let running = 0;
+
+  const next = async () => {
+    if (running >= queueSize) {
+      return;
+    }
+
+    if (cursor === functionList.length) {
+      return;
+    }
+
+    const thisFunction = functionList[cursor];
+    const thisResolve = resolveList[cursor];
+    const thisReject = rejectList[cursor];
+
+    delete functionList[cursor];
+    delete resolveList[cursor];
+    delete rejectList[cursor];
+
+    cursor++;
+    running++;
+
+    try {
+      thisResolve(await thisFunction());
+    } catch (error) {
+      thisReject(error);
+    } finally {
+      running--;
+
+      // If the cursor is at 1, this is the first promise that resolved,
+      // so we're now done the "kick start", and can start the remaining
+      // promises (up to queueSize).
+      if (cursor === 1) {
+        // Since only one promise is used for the "kick start", and that one
+        // has just resolved, we know there's none running at all right now,
+        // and can start as many as specified in the queueSize right away.
+        for (let i = 0; i < queueSize; i++) {
+          next();
+        }
+      } else {
+        next();
+      }
+    }
+  };
+
+  // Only start a single promise, as a "kick start", so that it resolves as
+  // early as possible (it will resolve before we use CPU to start the rest
+  // of the promises, up to queueSize).
+  next();
+
+  return promiseList;
 }
 
 export function delay(ms) {

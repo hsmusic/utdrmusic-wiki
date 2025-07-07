@@ -14,6 +14,7 @@ export default {
     'generateAlbumStyleTags',
     'generateAlbumTrackList',
     'generateCommentaryEntry',
+    'generateContentContentHeading',
     'generateContentHeading',
     'generatePageLayout',
     'linkAlbumCommentary',
@@ -54,6 +55,9 @@ export default {
 
     contentHeading:
       relation('generateContentHeading'),
+
+    contentContentHeading:
+      relation('generateContentContentHeading', album),
 
     releaseInfo:
       relation('generateAlbumReleaseInfo', album),
@@ -170,14 +174,16 @@ export default {
 
           html.tag('p',
             {[html.onlyIfContent]: true},
-            {[html.joinChildren]: html.tag('br')},
 
-            language.encapsulate('releaseInfo', capsule => [
-              language.$(capsule, 'addedToWiki', {
-                [language.onlyIfOptions]: ['date'],
-                date: language.formatDate(data.dateAddedToWiki),
-              }),
-            ])),
+            language.$('releaseInfo.addedToWiki', {
+              [language.onlyIfOptions]: ['date'],
+              date: language.formatDate(data.dateAddedToWiki),
+            })),
+
+          (!html.isBlank(relations.artistCommentaryEntries) ||
+           !html.isBlank(relations.creditSourceEntries))
+          &&
+            html.tag('hr', {class: 'main-separator'}),
 
           language.encapsulate('releaseInfo.additionalFiles', capsule =>
             html.tags([
@@ -191,20 +197,20 @@ export default {
             ])),
 
           html.tags([
-            relations.contentHeading.clone()
+            relations.contentContentHeading.clone()
               .slots({
                 attributes: {id: 'artist-commentary'},
-                title: language.$('misc.artistCommentary'),
+                string: 'misc.artistCommentary',
               }),
 
             relations.artistCommentaryEntries,
           ]),
 
           html.tags([
-            relations.contentHeading.clone()
+            relations.contentContentHeading.clone()
               .slots({
                 attributes: {id: 'crediting-sources'},
-                title: language.$('misc.creditingSources'),
+                string: 'misc.creditingSources',
               }),
 
             relations.creditSourceEntries,

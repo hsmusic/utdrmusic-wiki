@@ -53,6 +53,17 @@ export const attributeSpec = {
   },
 };
 
+let disabledSlotValidation = false;
+let disabledTagTracing = false;
+
+export function disableSlotValidation() {
+  disabledSlotValidation = true;
+}
+
+export function disableTagTracing() {
+  disabledTagTracing = true;
+}
+
 // Pass to tag() as an attributes key to make tag() return a 8lank tag if the
 // provided content is empty. Useful for when you'll only 8e showing an element
 // according to the presence of content that would 8elong there.
@@ -223,7 +234,11 @@ export function isBlank(content) {
     // could include content. These need to be checked too.
     // Check each of the templates one at a time.
     for (const template of result) {
-      const content = template.content;
+      // Resolve the content all the way down to a tag -
+      // if it's a template that returns another template,
+      // that won't do, because we need to detect if its
+      // final content is a tag marked onlyIfSiblings.
+      const content = normalize(template);
 
       if (content instanceof Tag && content.onlyIfSiblings) {
         continue;
@@ -352,8 +367,10 @@ export class Tag {
     this.attributes = attributes;
     this.content = content;
 
-    this.#traceError = new Error();
-  }
+    if (!disabledTagTracing) {
+      this.#traceError = new Error();
+    }
+}
 
   clone() {
     return Reflect.construct(this.constructor, [
@@ -706,17 +723,19 @@ export class Tag {
             `of ${inspect(this, {compact: true})}`,
             {cause: caughtError});
 
-        error[Symbol.for(`hsmusic.aggregate.alwaysTrace`)] = true;
-        error[Symbol.for(`hsmusic.aggregate.traceFrom`)] = this.#traceError;
+        if (this.#traceError && !disabledTagTracing) {
+          error[Symbol.for(`hsmusic.aggregate.alwaysTrace`)] = true;
+          error[Symbol.for(`hsmusic.aggregate.traceFrom`)] = this.#traceError;
 
-        error[Symbol.for(`hsmusic.aggregate.unhelpfulTraceLines`)] = [
-          /content-function\.js/,
-          /util\/html\.js/,
-        ];
+          error[Symbol.for(`hsmusic.aggregate.unhelpfulTraceLines`)] = [
+            /content-function\.js/,
+            /util\/html\.js/,
+          ];
 
-        error[Symbol.for(`hsmusic.aggregate.helpfulTraceLines`)] = [
-          /content\/dependencies\/(.*\.js:.*(?=\)))/,
-        ];
+          error[Symbol.for(`hsmusic.aggregate.helpfulTraceLines`)] = [
+            /content\/dependencies\/(.*\.js:.*(?=\)))/,
+          ];
+        }
 
         throw error;
       }
@@ -1131,6 +1150,34 @@ export class Attributes {
   }
 
   add(...args) {
+    // Very common case: add({class: 'foo', id: 'bar'})¡
+    // The argument is a plain object (no Template, no Attributes,
+    // no blessAttributes symbol). We can skip the expensive
+    // isAttributesAdditionSinglet() validation and flatten/array handling.
+    if (
+      args.length === 1 &&
+      args[0] &&
+      typeof args[0] === 'object' &&
+      !Array.isArray(args[0]) &&
+      !(args[0] instanceof Attributes) &&
+      !(args[0] instanceof Template) &&
+      !Object.hasOwn(args[0], blessAttributes)
+    ) {
+      const obj = args[0];
+
+      // Preserve existing merge semantics by funnelling each key through
+      // the internal #addOneAttribute helper (handles class/style union,
+      // unique merging, etc.) but avoid *per-object* validation overhead.
+      for (const key of Reflect.ownKeys(obj)) {
+        this.#addOneAttribute(key, obj[key]);
+      }
+
+      // Match the original return style (list of results) so callers that
+      // inspect the return continue to work.
+      return obj;
+    }
+
+    // Fall back to the original slow-but-thorough implementation
     switch (args.length) {
       case 1:
         isAttributesAdditionSinglet(args[0]);
@@ -1142,9 +1189,10 @@ export class Attributes {
 
       default:
         throw new Error(
-          `Expected array or object, or attribute and value`);
+          'Expected array or object, or attribute and value');
     }
   }
+
 
   with(...args) {
     const clone = this.clone();
@@ -1739,6 +1787,10 @@ export class Template {
   }
 
   static validateSlotValueAgainstDescription(value, description) {
+    if (disabledSlotValidation) {
+      return true;
+    }
+
     if (value === undefined) {
       throw new TypeError(`Specify value as null or don't specify at all`);
     }

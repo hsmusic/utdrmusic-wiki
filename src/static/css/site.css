@@ -61,7 +61,7 @@ body::before, .wallpaper-part {
 
 #page-container {
   max-width: 1100px;
-  margin: 0 auto 40px;
+  margin: 0 auto 38px;
   padding: 15px 0;
 }
 
@@ -76,10 +76,25 @@ body::before, .wallpaper-part {
   height: unset;
 }
 
+@property --banner-shine {
+  syntax: '<percentage>';
+  initial-value: 0%;
+  inherits: false;
+}
+
 #banner {
   margin: 10px 0;
   width: 100%;
   position: relative;
+
+  --banner-shine: 4%;
+  -webkit-box-reflect: below -12px linear-gradient(transparent, color-mix(in srgb, transparent, var(--banner-shine) white));
+  transition: --banner-shine 0.8s;
+}
+
+#banner:hover {
+  --banner-shine: 35%;
+  transition-delay: 0.3s;
 }
 
 #banner::after {
@@ -261,7 +276,11 @@ body::before, .wallpaper-part {
 #page-container {
   background-color: var(--bg-color, rgba(35, 35, 35, 0.8));
   color: #ffffff;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+  border-bottom: 2px solid #fff1;
+  box-shadow:
+    0 0 40px #0008,
+    0 2px 15px -3px #2221,
+    0 2px 6px 2px #1113;
 }
 
 #skippers > * {
@@ -1503,10 +1522,26 @@ s.spoiler::-moz-selection {
   background: white;
 }
 
-span.path {
-  font-size: 0.9em;
+span.path, code.filename {
+  font-size: 0.95em;
   font-family: "courier new", monospace;
   font-weight: 800;
+  background: #ccc3;
+
+  padding: 0.05em 0.5ch;
+  border: 1px solid #ccce;
+  border-radius: 2px;
+  line-height: 1.4;
+}
+
+.image-details code.filename {
+  margin-left: -0.4ch;
+  opacity: 0.8;
+}
+
+.image-details code.filename:hover {
+  opacity: 1;
+  cursor: text;
 }
 
 span.path i {
@@ -1679,6 +1714,11 @@ p.image-details.origin-details {
   margin-bottom: 2px;
 }
 
+p.image-details.origin-details .origin-details {
+  display: block;
+  margin-top: 0.25em;
+}
+
 .cover-artwork-joiner {
   z-index: -2;
 }
@@ -1750,6 +1790,15 @@ p.image-details.origin-details {
   color: var(--primary-color);
 }
 
+.inherited-commentary-section {
+  clear: right;
+  margin-top: 1em;
+  margin-right: min(4vw, 60px);
+  border: 2px solid var(--deep-color);
+  border-radius: 4px;
+  background: #ffffff07;
+}
+
 .commentary-art {
   float: right;
   width: 30%;
@@ -1777,9 +1826,41 @@ p.image-details.origin-details {
   padding-left: 40px;
 }
 
-.lyrics-entry .lyrics-details {
+.lyrics-entry .lyrics-details,
+.lyrics-entry .origin-details {
   font-size: 0.9em;
   font-style: oblique;
+}
+
+.lyrics-entry .lyrics-details {
+  margin-bottom: 0;
+}
+
+.lyrics-entry .origin-details {
+  margin-top: 0.25em;
+}
+
+.lyrics-entry {
+  clip-path: inset(-15px -20px);
+}
+
+.lyrics-entry::after {
+  content: "";
+  pointer-events: none;
+  display: block;
+
+  /* Slight stretching past the bottom of the screen seems
+   * to make resizing the window (and "revealing" that area)
+   * a bit smoother.
+   */
+  position: fixed;
+  bottom: -20px;
+  left: 0;
+  right: 0;
+
+  height: calc(20px + min(90px, 13.5vh));
+  background: linear-gradient(to bottom, transparent, black 70%, black);
+  opacity: 0.6;
 }
 
 .js-hide,
@@ -1801,10 +1882,18 @@ p.image-details.origin-details {
   margin-bottom: 1.5em;
 }
 
-a.align-center, img.align-center, audio.align-center {
+.content-image-container.align-full {
+  width: 100%;
+}
+
+a.align-center, img.align-center, audio.align-center, video.align-center {
   display: block;
   margin-left: auto;
   margin-right: auto;
+}
+
+a.align-full, img.align-full, video.align-full {
+  width: 100%;
 }
 
 center {
@@ -2134,6 +2223,13 @@ ul > li.has-details {
   margin-left: -17px;
 }
 
+li .origin-details {
+  display: block;
+  margin-left: 2ch;
+  font-size: 0.9em;
+  font-style: oblique;
+}
+
 .album-group-list dt,
 .group-series-list dt {
   font-style: oblique;
@@ -2184,29 +2280,52 @@ ul > li.has-details {
 
 #content hr {
   border: 1px inset #808080;
-  width: 100%;
+}
+
+#content hr.split {
+  color: #808080;
 }
 
 #content hr.split::before {
   content: "(split)";
-  color: #808080;
 }
 
-#content hr.split {
+#content hr.main-separator {
+  color: var(--dim-color);
+  clear: none;
+  margin-top: -0.25em;
+  margin-bottom: 1.75em;
+}
+
+#content hr.main-separator::before {
+  content: "♦";
+  font-size: 1.2em;
+}
+
+#content hr.split,
+#content hr.main-separator {
   position: relative;
   overflow: hidden;
   border: none;
 }
 
-#content hr.split::after {
+#content hr.split::after,
+#content hr.main-separator::after {
   display: inline-block;
   content: "";
-  border: 1px inset #808080;
-  width: 100%;
+  width: calc(100% - min(calc(8vw - 35px), 45px));
   position: absolute;
   top: 50%;
-  margin-top: -2px;
   margin-left: 10px;
+}
+
+#content hr.split::after {
+  border: 1px inset currentColor;
+  margin-top: -2px;
+}
+
+#content hr.main-separator::after {
+  border-bottom: 1px solid currentColor;
 }
 
 li > ul {
@@ -2581,6 +2700,7 @@ html[data-url-key="localized.listing"][data-url-value0="tags/network"] dl dt:las
 .content-video-container,
 .content-audio-container {
   width: fit-content;
+  max-width: 100%;
   background-color: var(--dark-color);
   border: 2px solid var(--primary-color);
   border-radius: 2.5px 2.5px 3px 3px;
@@ -2590,12 +2710,18 @@ html[data-url-key="localized.listing"][data-url-value0="tags/network"] dl dt:las
 .content-video-container video,
 .content-audio-container audio {
   display: block;
+  max-width: 100%;
 }
 
 .content-video-container.align-center,
 .content-audio-container.align-center {
   margin-left: auto;
   margin-right: auto;
+}
+
+.content-video-container.align-full,
+.content-audio-container.align-full {
+  width: 100%;
 }
 
 .content-audio-container .filename {
@@ -2662,6 +2788,12 @@ html[data-url-key="localized.listing"][data-url-value0="tags/network"] dl dt:las
 
 img {
   object-fit: cover;
+}
+
+p > img {
+  max-width: 100%;
+  object-fit: contain;
+  height: auto;
 }
 
 .image-inner-area::after {
@@ -3325,15 +3457,12 @@ main.long-content .content-sticky-heading-container .content-sticky-subheading-r
   grid-template-columns: 1fr min(40%, 90px);
 }
 
-.content-sticky-heading-root.has-cover {
-  padding-right: min(40%, 400px);
-}
-
 .content-sticky-heading-row h1 {
   position: relative;
   margin: 0;
   padding-right: 20px;
   line-height: 1.4;
+  overflow-x: hidden;
 }
 
 .content-sticky-heading-row h1 .reference-collapsed-heading {
@@ -3473,7 +3602,9 @@ main.long-content .content-sticky-heading-container .content-sticky-subheading-r
 }
 
 #content, .sidebar {
-  contain: paint;
+  /* In the year of our pizza 2025, we try commenting this out.
+   */
+  /*contain: paint;*/
 }
 
 /* Sticky sidebar */

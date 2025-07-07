@@ -2,11 +2,13 @@ export default {
   contentDependencies: [
     'generateAdditionalFilesList',
     'generateAdditionalNamesBox',
+    'generateAlbumArtworkColumn',
     'generateAlbumNavAccent',
     'generateAlbumSecondaryNav',
     'generateAlbumSidebar',
     'generateAlbumStyleTags',
     'generateCommentaryEntry',
+    'generateContentContentHeading',
     'generateContentHeading',
     'generateContributionList',
     'generateLyricsSection',
@@ -32,6 +34,14 @@ export default {
       (track.isMainRelease
         ? track
         : track.mainReleaseTrack),
+
+    singleTrackSingle:
+      track.album.style === 'single' &&
+      track.album.tracks.length === 1,
+
+    firstTrackInSingle:
+      track.album.style === 'single' &&
+      track === track.album.tracks[0],
   }),
 
   relations: (relation, query, track) => ({
@@ -47,6 +57,9 @@ export default {
     navLinks:
       relation('generateTrackNavLinks', track),
 
+    albumNavLink:
+      relation('linkAlbum', track.album),
+
     albumNavAccent:
       relation('generateAlbumNavAccent', track.album, track),
 
@@ -60,10 +73,15 @@ export default {
       relation('generateAdditionalNamesBox', track.additionalNames),
 
     artworkColumn:
-      relation('generateTrackArtworkColumn', track),
+      (query.firstTrackInSingle
+        ? relation('generateAlbumArtworkColumn', track.album)
+        : relation('generateTrackArtworkColumn', track)),
 
     contentHeading:
       relation('generateContentHeading'),
+
+    contentContentHeading:
+      relation('generateContentContentHeading', track),
 
     releaseInfo:
       relation('generateTrackReleaseInfo', track),
@@ -75,18 +93,20 @@ export default {
       relation('generateContributionList', track.contributorContribs),
 
     referencedTracksList:
-      relation('generateTrackList', track.referencedTracks),
+      relation('generateTrackList', track.referencedTracks, track),
 
     sampledTracksList:
-      relation('generateTrackList', track.sampledTracks),
+      relation('generateTrackList', track.sampledTracks, track),
 
     referencedByTracksList:
       relation('generateTrackListDividedByGroups',
-        query.mainReleaseTrack.referencedByTracks),
+        query.mainReleaseTrack.referencedByTracks,
+        track),
 
     sampledByTracksList:
       relation('generateTrackListDividedByGroups',
-        query.mainReleaseTrack.sampledByTracks),
+        query.mainReleaseTrack.sampledByTracks,
+        track),
 
     flashesThatFeatureList:
       relation('generateTrackInfoPageFeaturedByFlashesList', track),
@@ -115,12 +135,21 @@ export default {
         .map(entry => relation('generateCommentaryEntry', entry)),
   }),
 
-  data: (_query, track) => ({
+  data: (query, track) => ({
     name:
       track.name,
 
     color:
       track.color,
+
+    dateAlbumAddedToWiki:
+      track.album.dateAddedToWiki,
+
+    singleTrackSingle:
+      query.singleTrackSingle,
+
+    firstTrackInSingle:
+      query.firstTrackInSingle,
   }),
 
   generate: (data, relations, {html, language}) =>
@@ -316,6 +345,22 @@ export default {
             relations.flashesThatFeatureList,
           ]),
 
+          data.firstTrackInSingle &&
+            html.tag('p',
+              {[html.onlyIfContent]: true},
+
+              language.$('releaseInfo.addedToWiki', {
+                [language.onlyIfOptions]: ['date'],
+                date: language.formatDate(data.dateAlbumAddedToWiki),
+              })),
+
+          data.firstTrackInSingle &&
+          (!html.isBlank(relations.lyricsSection) ||
+           !html.isBlank(relations.artistCommentaryEntries) ||
+           !html.isBlank(relations.creditingSourceEntries) ||
+           !html.isBlank(relations.referencingSourceEntries)) &&
+            html.tag('hr', {class: 'main-separator'}),
+
           relations.lyricsSection,
 
           html.tags([
@@ -351,20 +396,20 @@ export default {
           relations.artistCommentarySection,
 
           html.tags([
-            relations.contentHeading.clone()
+            relations.contentContentHeading.clone()
               .slots({
                 attributes: {id: 'crediting-sources'},
-                title: language.$('misc.creditingSources'),
+                string: 'misc.creditingSources',
               }),
 
             relations.creditingSourceEntries,
           ]),
 
           html.tags([
-            relations.contentHeading.clone()
+            relations.contentContentHeading.clone()
               .slots({
                 attributes: {id: 'referencing-sources'},
-                title: language.$('misc.referencingSources'),
+                string: 'misc.referencingSources',
               }),
 
             relations.referencingSourceEntries,
@@ -372,17 +417,28 @@ export default {
         ],
 
         navLinkStyle: 'hierarchical',
-        navLinks: html.resolve(relations.navLinks),
+        navLinks:
+          (data.singleTrackSingle
+            ? [
+                {auto: 'home'},
+                {
+                  html: relations.albumNavLink,
+                  accent: language.$(pageCapsule, 'nav.singleAccent'),
+                },
+              ]
+            : html.resolve(relations.navLinks)),
 
         navBottomRowContent:
-          relations.albumNavAccent.slots({
-            showTrackNavigation: true,
-            showExtraLinks: false,
-          }),
+          (data.singleTrackSingle
+            ? null
+            : relations.albumNavAccent.slots({
+                showTrackNavigation: true,
+                showExtraLinks: false,
+              })),
 
         secondaryNav:
           relations.secondaryNav
-            .slot('mode', 'track'),
+            .slot('mode', data.singleTrackSingle ? 'album' : 'track'),
 
         leftSidebar: relations.sidebar,
 

@@ -77,6 +77,7 @@ export class Artwork extends Thing {
 
     label: simpleString(),
     source: contentString(),
+    originDetails: contentString(),
 
     dateFromThingProperty: simpleString(),
 
@@ -169,6 +170,7 @@ export class Artwork extends Thing {
       withResolvedContribs({
         from: input.updateValue({validate: isContributionList}),
         date: '#date',
+        thingProperty: input.thisProperty(),
         artistProperty: 'artistContribsArtistProperty',
       }),
 
@@ -369,6 +371,21 @@ export class Artwork extends Thing {
     attachingArtworks: reverseReferenceList({
       reverse: soupyReverse.input('artworksWhichAttach'),
     }),
+
+    groups: [
+      withPropertyFromObject({
+        object: 'thing',
+        property: input.value('groups'),
+      }),
+
+      exposeDependencyOrContinue({
+        dependency: '#thing.groups',
+      }),
+
+      exposeConstant({
+        value: input.value([]),
+      }),
+    ],
   });
 
   static [Thing.yamlDocumentSpec] = {
@@ -383,6 +400,7 @@ export class Artwork extends Thing {
 
       'Label': {property: 'label'},
       'Source': {property: 'source'},
+      'Origin Details': {property: 'originDetails'},
 
       'Date': {
         property: 'date',
@@ -452,6 +470,18 @@ export class Artwork extends Thing {
     if (!this.thing.getOwnArtworkPath) return null;
 
     return this.thing.getOwnArtworkPath(this);
+  }
+
+  countOwnContributionInContributionTotals(contrib) {
+    if (this.attachAbove) {
+      return false;
+    }
+
+    if (contrib.annotation?.startsWith('edits for wiki')) {
+      return false;
+    }
+
+    return true;
   }
 
   [inspect.custom](depth, options, inspect) {

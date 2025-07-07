@@ -24,7 +24,9 @@ export default {
       attributes: {class: 'track-list-sidebar-box'},
 
       content: [
-        html.tag('h1', relations.albumLink),
+        html.tag('h1', {[html.onlyIfSiblings]: true},
+          relations.albumLink),
+
         relations.trackSections,
       ],
     })

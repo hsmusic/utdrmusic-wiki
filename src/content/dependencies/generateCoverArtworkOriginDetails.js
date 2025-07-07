@@ -29,6 +29,9 @@ export default {
     source:
       relation('transformContent', artwork.source),
 
+    originDetails:
+      relation('transformContent', artwork.originDetails),
+
     albumLink:
       (query.artworkThingType === 'album'
         ? relation('linkAlbum', artwork.thing)
@@ -47,6 +50,10 @@ export default {
 
     artworkThingType:
       query.artworkThingType,
+
+    forSingleStyleAlbum:
+      query.artworkThingType === 'album' &&
+      artwork.thing.style === 'single',
   }),
 
   generate: (data, relations, {html, language, pagePath}) =>
@@ -95,6 +102,7 @@ export default {
           const trackArtFromAlbum =
             pagePath[0] === 'track' &&
             data.artworkThingType === 'album' &&
+            !data.forSingleStyleAlbum &&
               language.$(capsule, 'trackArtFromAlbum', {
                 album:
                   relations.albumLink.slot('color', false),
@@ -146,12 +154,22 @@ export default {
               year: relations.datetimestamp,
             });
 
+          const originDetails =
+            html.tag('span', {class: 'origin-details'},
+              {[html.onlyIfContent]: true},
+
+              relations.originDetails.slots({
+                mode: 'inline',
+                absorbPunctuationFollowingExternalLinks: false,
+              }));
+
           return [
             artworkBy,
             trackArtFromAlbum,
             source,
             label,
             year,
+            originDetails,
           ];
         })())),
 };
