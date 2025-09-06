@@ -87,7 +87,7 @@ function makeProcessDocument(thingConstructor, {
   //   ]
   //
   // ...means A can't coexist with B or C, B can't coexist with A or C, and
-  // C can't coexist iwth A, B, or D - but it's okay for D to coexist with
+  // C can't coexist with A, B, or D - but it's okay for D to coexist with
   // A or B.
   //
   invalidFieldCombinations = [],
@@ -182,9 +182,22 @@ function makeProcessDocument(thingConstructor, {
 
     const fieldCombinationErrors = [];
 
-    for (const {message, fields} of invalidFieldCombinations) {
+    for (const {message, fields: fieldsSpec} of invalidFieldCombinations) {
       const fieldsPresent =
-        presentFields.filter(field => fields.includes(field));
+        fieldsSpec.flatMap(fieldSpec => {
+          if (Array.isArray(fieldSpec)) {
+            const [field, match] = fieldSpec;
+            if (!presentFields.includes(field)) return [];
+            if (typeof match === 'function') {
+              return match(document[field]) ? [field] : [];
+            } else {
+              return document[field] === match ? [field] : [];
+            }
+          }
+
+          const field = fieldSpec;
+          return presentFields.includes(field) ? [field] : [];
+        });
 
       if (fieldsPresent.length >= 2) {
         const filteredDocument =
@@ -194,7 +207,10 @@ function makeProcessDocument(thingConstructor, {
             {preserveOriginalOrder: true});
 
         fieldCombinationErrors.push(
-          new FieldCombinationError(filteredDocument, message));
+          new FieldCombinationError(
+            filteredDocument,
+            fieldsSpec,
+            message));
 
         for (const field of Object.keys(filteredDocument)) {
           skippedFields.add(field);
@@ -250,7 +266,9 @@ function makeProcessDocument(thingConstructor, {
 
       // This variable would like to certify itself as "not into capitalism".
       let propertyValue =
-        (fieldSpecs[field].transform
+        (documentValue === null
+          ? null
+       : fieldSpecs[field].transform
           ? fieldSpecs[field].transform(documentValue, transformUtilities)
           : documentValue);
 
@@ -416,19 +434,36 @@ export class FieldCombinationAggregateError extends AggregateError {
 }
 
 export class FieldCombinationError extends Error {
-  constructor(fields, message) {
-    const fieldNames = Object.keys(fields);
+  constructor(filteredDocument, fieldsSpec, message) {
+    const fieldNames = Object.keys(filteredDocument);
 
     const fieldNamesText =
       fieldNames
-        .map(field => colors.red(field))
+        .map(field => {
+          if (fieldsSpec.includes(field)) {
+            return colors.red(field);
+          }
+
+          const match =
+            fieldsSpec
+              .find(fieldSpec =>
+                Array.isArray(fieldSpec) &&
+                fieldSpec[0] === field)
+              .at(1);
+
+          if (typeof match === 'function') {
+            return colors.red(`${field}: ${filteredDocument[field]}`);
+          } else {
+            return colors.red(`${field}: ${match}`);
+          }
+        })
         .join(', ');
 
     const mainMessage = `Don't combine ${fieldNamesText}`;
 
     const causeMessage =
       (typeof message === 'function'
-        ? message(fields)
+        ? message(filteredFields)
      : typeof message === 'string'
         ? message
         : null);
@@ -440,7 +475,7 @@ export class FieldCombinationError extends Error {
           : null),
     });
 
-    this.fields = fields;
+    this.fields = fieldNames;
   }
 }
 
@@ -976,6 +1011,12 @@ export const documentModes = {
   // array of processed documents (wiki objects).
   allInOne: Symbol('Document mode: allInOne'),
 
+  // allTogether: One or more documens, spread across any number of files.
+  // Expects files array (or function) and processDocument function.
+  // Calls save with an array of processed documents (wiki objects) - this is
+  // a flat array, *not* an array of the documents processed from *each* file.
+  allTogether: Symbol('Document mode: allTogether'),
+
   // oneDocumentTotal: Just a single document, represented in one file.
   // Expects file string (or function) and processDocument function. Calls
   // save with the single processed wiki document (data object).
@@ -1086,6 +1127,7 @@ export async function getFilesFromDataStep(dataStep, {dataPath}) {
       }
     }
 
+    case documentModes.allTogether:
     case documentModes.headerAndEntries:
     case documentModes.onePerFile: {
       if (!dataStep.files) {
@@ -1241,7 +1283,8 @@ export function processThingsFromDataStep(documents, dataStep) {
   const {documentMode} = dataStep;
 
   switch (documentMode) {
-    case documentModes.allInOne: {
+    case documentModes.allInOne:
+    case documentModes.allTogether: {
       const result = [];
       const aggregate = openAggregate({message: `Errors processing documents`});
 
@@ -1514,6 +1557,10 @@ export function saveThingsFromDataStep(thingLists, dataStep) {
           : thingLists[0]);
 
       return dataStep.save(thing);
+    }
+
+    case documentModes.allTogether: {
+      return dataStep.save(thingLists.flat());
     }
 
     case documentModes.headerAndEntries:

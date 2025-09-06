@@ -1,8 +1,9 @@
-import { Temporal, toTemporalInstant } from '@js-temporal/polyfill';
+import {Temporal, toTemporalInstant} from '@js-temporal/polyfill';
 
 import {withAggregate} from '#aggregate';
 import CacheableObject from '#cacheable-object';
 import {logWarn} from '#cli';
+import {input} from '#composite';
 import * as html from '#html';
 import {empty} from '#sugar';
 import {isLanguageCode} from '#validators';
@@ -16,6 +17,7 @@ import {
   isExternalLinkStyle,
 } from '#external-links';
 
+import {exposeConstant} from '#composite/control-flow';
 import {externalFunction, flag, name} from '#composite/wiki-properties';
 
 export const languageOptionRegex = /{(?<name>[A-Z0-9_]+)}/g;
@@ -127,6 +129,12 @@ export class Language extends Thing {
 
     // Expose only
 
+    isLanguage: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+
     onlyIfOptions: {
       flags: {expose: true},
       expose: {
@@ -204,6 +212,10 @@ export class Language extends Thing {
   }
 
   formatString(...args) {
+    if (typeof args.at(-1) === 'function') {
+      throw new Error(`Passed function - did you mean language.encapsulate() instead?`);
+    }
+
     const hasOptions =
       typeof args.at(-1) === 'object' &&
       args.at(-1) !== null;
@@ -310,7 +322,7 @@ export class Language extends Thing {
           return undefined;
         }
 
-        return optionValue;
+        return this.sanitize(optionValue);
       },
     });
 
@@ -375,26 +387,16 @@ export class Language extends Thing {
 
       partInProgress += template.slice(lastIndex, match.index);
 
-      // Sanitize string arguments in particular. These are taken to come from
-      // (raw) data and may include special characters that aren't meant to be
-      // rendered as HTML markup.
-      const sanitizedInsertion =
-        this.#sanitizeValueForInsertion(insertion);
-
-      if (typeof sanitizedInsertion === 'string') {
-        // Join consecutive strings together.
-        partInProgress += sanitizedInsertion;
-      } else if (
-        sanitizedInsertion instanceof html.Tag &&
-        sanitizedInsertion.contentOnly
-      ) {
-        // Collapse string-only tag contents onto the current string part.
-        partInProgress += sanitizedInsertion.toString();
-      } else {
-        // Push the string part in progress, then the insertion as-is.
-        outputParts.push(partInProgress);
-        outputParts.push(sanitizedInsertion);
-        partInProgress = '';
+      for (const insertionItem of html.smush(insertion).content) {
+        if (typeof insertionItem === 'string') {
+          // Join consecutive strings together.
+          partInProgress += insertionItem;
+        } else {
+          // Push the string part in progress, then the insertion as-is.
+          outputParts.push(partInProgress);
+          outputParts.push(insertionItem);
+          partInProgress = '';
+        }
       }
 
       lastIndex = match.index + match[0].length;

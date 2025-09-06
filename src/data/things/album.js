@@ -10,7 +10,8 @@ import {traverse} from '#node-utils';
 import {sortAlbumsTracksChronologically, sortChronologically} from '#sort';
 import {empty} from '#sugar';
 import Thing from '#thing';
-import {is, isColor, isDate, isDirectory, isNumber} from '#validators';
+import {is, isColor, isContributionList, isDate, isDirectory, isNumber}
+  from '#validators';
 
 import {
   parseAdditionalFiles,
@@ -26,15 +27,21 @@ import {
 } from '#yaml';
 
 import {withPropertyFromObject} from '#composite/data';
-import {exitWithoutArtwork, withDirectory, withHasArtwork}
-  from '#composite/wiki-data';
 
 import {
   exitWithoutDependency,
   exposeConstant,
   exposeDependency,
+  exposeDependencyOrContinue,
   exposeUpdateValueOrContinue,
 } from '#composite/control-flow';
+
+import {
+  exitWithoutArtwork,
+  withDirectory,
+  withHasArtwork,
+  withResolvedContribs,
+} from '#composite/wiki-data';
 
 import {
   color,
@@ -137,6 +144,33 @@ export class Album extends Thing {
       artistProperty: input.value('albumArtistContributions'),
     }),
 
+    trackArtistContribs: [
+      withResolvedContribs({
+        from: input.updateValue({validate: isContributionList}),
+        thingProperty: input.thisProperty(),
+        artistProperty: input.value('albumTrackArtistContributions'),
+        date: 'date',
+      }).outputs({
+        '#resolvedContribs': '#trackArtistContribs',
+      }),
+
+      exposeDependencyOrContinue({
+        dependency: '#trackArtistContribs',
+        mode: input.value('empty'),
+      }),
+
+      withResolvedContribs({
+        from: 'artistContribs',
+        thingProperty: input.thisProperty(),
+        artistProperty: input.value('albumTrackArtistContributions'),
+        date: 'date',
+      }).outputs({
+        '#resolvedContribs': '#trackArtistContribs',
+      }),
+
+      exposeDependency({dependency: '#trackArtistContribs'}),
+    ],
+
     // > Update & expose - General configuration
 
     countTracksInArtistTotals: flag(true),
@@ -144,6 +178,8 @@ export class Album extends Thing {
     hasTrackNumbers: flag(true),
     isListedOnHomepage: flag(true),
     isListedInGalleries: flag(true),
+
+    hideDuration: flag(false),
 
     // > Update & expose - General metadata
 
@@ -357,13 +393,13 @@ export class Album extends Thing {
       class: input.value(CreditingSourcesEntry),
     }),
 
-    // Additional files
+    // > Update & expose - Additional files
 
     additionalFiles: thingList({
       class: input.value(AdditionalFile),
     }),
 
-    // Update only
+    // > Update only
 
     find: soupyFind(),
     reverse: soupyReverse(),
@@ -378,7 +414,13 @@ export class Album extends Thing {
       class: input.value(WikiInfo),
     }),
 
-    // Expose only
+    // > Expose only
+
+    isAlbum: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     commentatorArtists: commentatorArtists(),
 
@@ -532,6 +574,9 @@ export class Album extends Thing {
     albumArtistContributionsBy:
       soupyReverse.contributionsBy('albumData', 'artistContribs'),
 
+    albumTrackArtistContributionsBy:
+      soupyReverse.contributionsBy('albumData', 'trackArtistContribs'),
+
     albumCoverArtistContributionsBy:
       soupyReverse.artworkContributionsBy('albumData', 'coverArtworks'),
 
@@ -593,6 +638,11 @@ export class Album extends Thing {
         transform: parseContributors,
       },
 
+      'Track Artists': {
+        property: 'trackArtistContribs',
+        transform: parseContributors,
+      },
+
       // General configuration
 
       'Count Tracks In Artist Totals': {property: 'countTracksInArtistTotals'},
@@ -600,6 +650,8 @@ export class Album extends Thing {
       'Has Track Numbers': {property: 'hasTrackNumbers'},
       'Listed on Homepage': {property: 'isListedOnHomepage'},
       'Listed in Galleries': {property: 'isListedInGalleries'},
+
+      'Hide Duration': {property: 'hideDuration'},
 
       // General metadata
 
@@ -750,6 +802,26 @@ export class Album extends Thing {
     },
 
     invalidFieldCombinations: [
+      {message: `Move commentary on singles to the track`, fields: [
+        ['Style', 'single'],
+        'Commentary',
+      ]},
+
+      {message: `Move crediting sources on singles to the track`, fields: [
+        ['Style', 'single'],
+        'Crediting Sources',
+      ]},
+
+      {message: `Move referencing sources on singles to the track`, fields: [
+        ['Style', 'single'],
+        'Referencing Sources',
+      ]},
+
+      {message: `Move additional names on singles to the track`, fields: [
+        ['Style', 'single'],
+        'Additional Names',
+      ]},
+
       {message: `Specify one wallpaper style or multiple wallpaper parts, not both`, fields: [
         'Wallpaper Parts',
         'Wallpaper Style',
@@ -991,6 +1063,12 @@ export class TrackSection extends Thing {
     reverse: soupyReverse(),
 
     // Expose only
+
+    isTrackSection: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     directory: [
       withAlbum(),

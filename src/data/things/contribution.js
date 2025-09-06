@@ -27,8 +27,6 @@ import {
 
 import {
   inheritFromContributionPresets,
-  thingPropertyMatches,
-  thingReferenceTypeMatches,
   withContainingReverseContributionList,
   withContributionArtist,
   withContributionContext,
@@ -144,6 +142,12 @@ export class Contribution extends Thing {
 
     // Expose only
 
+    isContribution: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+
     context: [
       withContributionContext(),
 
@@ -223,38 +227,6 @@ export class Contribution extends Thing {
         dependency: '#contributions',
       }),
     ],
-
-    isArtistContribution: thingPropertyMatches({
-      value: input.value('artistContribs'),
-    }),
-
-    isContributorContribution: thingPropertyMatches({
-      value: input.value('contributorContribs'),
-    }),
-
-    isCoverArtistContribution: thingPropertyMatches({
-      value: input.value('coverArtistContribs'),
-    }),
-
-    isBannerArtistContribution: thingPropertyMatches({
-      value: input.value('bannerArtistContribs'),
-    }),
-
-    isWallpaperArtistContribution: thingPropertyMatches({
-      value: input.value('wallpaperArtistContribs'),
-    }),
-
-    isForTrack: thingReferenceTypeMatches({
-      value: input.value('track'),
-    }),
-
-    isForAlbum: thingReferenceTypeMatches({
-      value: input.value('album'),
-    }),
-
-    isForFlash: thingReferenceTypeMatches({
-      value: input.value('flash'),
-    }),
 
     previousBySameArtist: [
       withContainingReverseContributionList().outputs({

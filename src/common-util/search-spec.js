@@ -1,57 +1,19 @@
 // Index structures shared by client and server, and relevant interfaces.
 
-function getArtworkPath(thing) {
-  switch (thing.constructor[Symbol.for('Thing.referenceType')]) {
-    case 'album': {
-      return [
-        'media.albumCover',
-        thing.directory,
-        thing.coverArtFileExtension,
-      ];
-    }
-
-    case 'flash': {
-      return [
-        'media.flashArt',
-        thing.directory,
-        thing.coverArtFileExtension,
-      ];
-    }
-
-    case 'track': {
-      if (thing.hasUniqueCoverArt) {
-        return [
-          'media.trackCover',
-          thing.album.directory,
-          thing.directory,
-          thing.coverArtFileExtension,
-        ];
-      } else if (thing.album.hasCoverArt) {
-        return [
-          'media.albumCover',
-          thing.album.directory,
-          thing.album.coverArtFileExtension,
-        ];
-      } else {
-        return null;
-      }
-    }
-
-    default:
-      return null;
-  }
-}
-
-function prepareArtwork(thing, {
+function prepareArtwork(artwork, thing, {
   checkIfImagePathHasCachedThumbnails,
   getThumbnailEqualOrSmaller,
   urls,
 }) {
+  if (!artwork) {
+    return undefined;
+  }
+
   const hasWarnings =
-    thing.artTags?.some(artTag => artTag.isContentWarning);
+    artwork.artTags?.some(artTag => artTag.isContentWarning);
 
   const artworkPath =
-    getArtworkPath(thing);
+    artwork.path;
 
   if (!artworkPath) {
     return undefined;
@@ -92,23 +54,48 @@ function baselineProcess(thing, opts) {
     thing.name;
 
   fields.artwork =
-    prepareArtwork(thing, opts);
+    null;
 
   fields.color =
     thing.color;
+
+  fields.disambiguator =
+    null;
 
   return fields;
 }
 
 const baselineStore = [
   'primaryName',
+  'disambiguator',
   'artwork',
   'color',
 ];
 
 function genericQuery(wikiData) {
+  const groupOrder =
+    wikiData.wikiInfo.divideTrackListsByGroups;
+
+  const getGroupRank = thing => {
+    const relevantRanks =
+      Array.from(groupOrder.entries())
+        .filter(({1: group}) => thing.groups.includes(group))
+        .map(({0: index}) => index);
+
+    if (relevantRanks.length === 0) {
+      return Infinity;
+    } else if (relevantRanks.length === 1) {
+      return relevantRanks[0];
+    } else {
+      return relevantRanks[0] + 0.5;
+    }
+  }
+
+  const sortByGroupRank = things =>
+    things.sort((a, b) => getGroupRank(a) - getGroupRank(b));
+
   return [
-    wikiData.albumData,
+    sortByGroupRank(wikiData.albumData.slice()),
 
     wikiData.artTagData,
 
@@ -119,10 +106,9 @@ function genericQuery(wikiData) {
 
     wikiData.groupData,
 
-    wikiData.trackData
-      // Exclude rereleases - there's no reasonable way to differentiate
-      // them from the main release as part of this query.
-      .filter(track => !track.mainReleaseTrack),
+    sortByGroupRank(
+      wikiData.trackData
+        .filter(track => !track.mainReleaseTrack)),
   ].flat();
 }
 
@@ -131,6 +117,20 @@ function genericProcess(thing, opts) {
 
   const kind =
     thing.constructor[Symbol.for('Thing.referenceType')];
+
+  const boundPrepareArtwork = artwork =>
+    prepareArtwork(artwork, thing, opts);
+
+  fields.artwork =
+    (kind === 'track' && thing.hasUniqueCoverArt
+      ? boundPrepareArtwork(thing.trackArtworks[0])
+   : kind === 'track'
+      ? boundPrepareArtwork(thing.album.coverArtworks[0])
+   : kind === 'album'
+      ? boundPrepareArtwork(thing.coverArtworks[0])
+   : kind === 'flash'
+      ? boundPrepareArtwork(thing.coverArtwork)
+      : null);
 
   fields.parentName =
     (kind === 'track'
@@ -141,10 +141,18 @@ function genericProcess(thing, opts) {
       ? thing.act.name
       : null);
 
+  fields.disambiguator =
+    fields.parentName;
+
   fields.artTags =
-    (thing.constructor.hasPropertyDescriptor('artTags')
-      ? thing.artTags.map(artTag => artTag.nameShort)
-      : []);
+    (Array.from(new Set(
+      (kind === 'track'
+        ? thing.trackArtworks.flatMap(artwork => artwork.artTags)
+     : kind === 'album'
+        ? thing.coverArtworks.flatMap(artwork => artwork.artTags)
+        : []))))
+
+      .map(artTag => artTag.nameShort);
 
   fields.additionalNames =
     (thing.constructor.hasPropertyDescriptor('additionalNames')
@@ -230,6 +238,10 @@ export function makeSearchIndex(descriptor, {FlexSearch}) {
     id: 'reference',
     index: descriptor.index,
     store: descriptor.store,
+
+    // Disable scoring, always return results according to provided order
+    // (specified above in `genericQuery`, etc).
+    resolution: 1,
   });
 }
 

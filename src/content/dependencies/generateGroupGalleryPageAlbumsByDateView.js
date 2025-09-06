@@ -1,15 +1,24 @@
 import {sortChronologically} from '#sort';
 
 export default {
-  contentDependencies: ['generateGroupGalleryPageAlbumGrid'],
+  contentDependencies: [
+    'generateGroupGalleryPageAlbumGrid',
+    'generateGroupGalleryPageStyleSelector',
+  ],
+
   extraDependencies: ['html', 'language'],
 
   query: (group) => ({
     albums:
-      sortChronologically(group.albums, {latestFirst: true}),
+      sortChronologically(group.albums.slice(), {latestFirst: true}),
   }),
 
   relations: (relation, query, group) => ({
+    styleSelector:
+      (group.divideAlbumsByStyle
+        ? relation('generateGroupGalleryPageStyleSelector', group)
+        : null),
+
     albumGrid:
       relation('generateGroupGalleryPageAlbumGrid',
         query.albums,
@@ -17,6 +26,10 @@ export default {
   }),
 
   slots: {
+    showTitle: {
+      type: 'boolean',
+    },
+
     attributes: {
       type: 'attributes',
       mutable: false,
@@ -31,8 +44,11 @@ export default {
         {[html.onlyIfContent]: true},
 
         html.tag('section', [
-          html.tag('h2',
-            language.$(capsule, 'title')),
+          slots.showTitle &&
+            html.tag('h2',
+              language.$(capsule, 'title')),
+
+          relations.styleSelector,
 
           relations.albumGrid,
         ]))),

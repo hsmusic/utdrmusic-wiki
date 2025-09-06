@@ -7,16 +7,19 @@ import * as albumCommentarySidebarModule from './album-commentary-sidebar.js';
 import * as artTagGalleryFilterModule from './art-tag-gallery-filter.js';
 import * as artTagNetworkModule from './art-tag-network.js';
 import * as artistExternalLinkTooltipModule from './artist-external-link-tooltip.js';
+import * as artistRollingWindowModule from './artist-rolling-window.js';
 import * as cssCompatibilityAssistantModule from './css-compatibility-assistant.js';
 import * as datetimestampTooltipModule from './datetimestamp-tooltip.js';
 import * as draggedLinkModule from './dragged-link.js';
-import * as expandableGallerySectionModule from './expandable-gallery-section.js';
+import * as expandableGridSectionModule from './expandable-grid-section.js';
+import * as galleryStyleSelectorModule from './gallery-style-selector.js';
 import * as hashLinkModule from './hash-link.js';
 import * as hoverableTooltipModule from './hoverable-tooltip.js';
 import * as imageOverlayModule from './image-overlay.js';
 import * as intrapageDotSwitcherModule from './intrapage-dot-switcher.js';
 import * as liveMousePositionModule from './live-mouse-position.js';
 import * as quickDescriptionModule from './quick-description.js';
+import * as revealAllGridControlModule from './reveal-all-grid-control.js';
 import * as scriptedLinkModule from './scripted-link.js';
 import * as sidebarSearchModule from './sidebar-search.js';
 import * as stickyHeadingModule from './sticky-heading.js';
@@ -30,16 +33,19 @@ export const modules = [
   artTagGalleryFilterModule,
   artTagNetworkModule,
   artistExternalLinkTooltipModule,
+  artistRollingWindowModule,
   cssCompatibilityAssistantModule,
   datetimestampTooltipModule,
   draggedLinkModule,
-  expandableGallerySectionModule,
+  expandableGridSectionModule,
+  galleryStyleSelectorModule,
   hashLinkModule,
   hoverableTooltipModule,
   imageOverlayModule,
   intrapageDotSwitcherModule,
   liveMousePositionModule,
   quickDescriptionModule,
+  revealAllGridControlModule,
   scriptedLinkModule,
   sidebarSearchModule,
   stickyHeadingModule,

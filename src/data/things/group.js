@@ -5,17 +5,28 @@ import {inspect} from 'node:util';
 import {colors} from '#cli';
 import {input} from '#composite';
 import Thing from '#thing';
-import {is} from '#validators';
+import {is, isBoolean} from '#validators';
 import {parseAnnotatedReferences, parseSerieses} from '#yaml';
+
+import {withPropertyFromObject} from '#composite/data';
+import {withUniqueReferencingThing} from '#composite/wiki-data';
+
+import {
+  exposeConstant,
+  exposeDependencyOrContinue,
+  exposeUpdateValueOrContinue,
+} from '#composite/control-flow';
 
 import {
   annotatedReferenceList,
   color,
   contentString,
   directory,
+  flag,
   name,
   referenceList,
   soupyFind,
+  soupyReverse,
   thing,
   thingList,
   urls,
@@ -29,6 +40,33 @@ export class Group extends Thing {
 
     name: name('Unnamed Group'),
     directory: directory(),
+
+    excludeFromGalleryTabs: [
+      exposeUpdateValueOrContinue({
+        validate: input.value(isBoolean),
+      }),
+
+      withUniqueReferencingThing({
+        reverse: soupyReverse.input('groupCategoriesWhichInclude'),
+      }).outputs({
+        '#uniqueReferencingThing': '#category',
+      }),
+
+      withPropertyFromObject({
+        object: '#category',
+        property: input.value('excludeGroupsFromGalleryTabs'),
+      }),
+
+      exposeDependencyOrContinue({
+        dependency: '#category.excludeGroupsFromGalleryTabs',
+      }),
+
+      exposeConstant({
+        value: input.value(false),
+      }),
+    ],
+
+    divideAlbumsByStyle: flag(false),
 
     description: contentString(),
 
@@ -54,9 +92,15 @@ export class Group extends Thing {
     // Update only
 
     find: soupyFind(),
-    reverse: soupyFind(),
+    reverse: soupyReverse(),
 
     // Expose only
+
+    isGroup: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
 
     descriptionShort: {
       flags: {expose: true},
@@ -133,6 +177,10 @@ export class Group extends Thing {
     fields: {
       'Group': {property: 'name'},
       'Directory': {property: 'directory'},
+
+      'Exclude From Gallery Tabs': {property: 'excludeFromGalleryTabs'},
+      'Divide Albums By Style': {property: 'divideAlbumsByStyle'},
+
       'Description': {property: 'description'},
       'URLs': {property: 'urls'},
 
@@ -217,6 +265,8 @@ export class GroupCategory extends Thing {
     name: name('Unnamed Group Category'),
     directory: directory(),
 
+    excludeGroupsFromGalleryTabs: flag(false),
+
     color: color(),
 
     groups: referenceList({
@@ -227,6 +277,14 @@ export class GroupCategory extends Thing {
     // Update only
 
     find: soupyFind(),
+
+    // Expose only
+
+    isGroupCategory: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
   });
 
   static [Thing.reverseSpecs] = {
@@ -241,7 +299,12 @@ export class GroupCategory extends Thing {
   static [Thing.yamlDocumentSpec] = {
     fields: {
       'Category': {property: 'name'},
+
       'Color': {property: 'color'},
+
+      'Exclude Groups From Gallery Tabs': {
+        property: 'excludeGroupsFromGalleryTabs',
+      },
     },
   };
 }

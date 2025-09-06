@@ -1,36 +1,36 @@
-import Thing from '#thing';
-
 function getName(thing) {
   if (!thing) {
     return null;
   }
 
-  const referenceType = thing.constructor[Thing.referenceType];
-
-  if (referenceType === 'artwork') {
+  if (thing.isArtwork) {
     return thing.thing.name;
   }
 
   return thing.name;
 }
 
+function getSiblings(contribution) {
+  let previous = contribution;
+  while (previous && previous.thing === contribution.thing) {
+    previous = previous.previousBySameArtist;
+  }
+
+  let next = contribution;
+  while (next && next.thing === contribution.thing) {
+    next = next.nextBySameArtist;
+  }
+
+  return {previous, next};
+}
+
 export default {
   contentDependencies: ['linkAnythingMan'],
   extraDependencies: ['html', 'language'],
 
-  query(contribution) {
-    let previous = contribution;
-    while (previous && previous.thing === contribution.thing) {
-      previous = previous.previousBySameArtist;
-    }
-
-    let next = contribution;
-    while (next && next.thing === contribution.thing) {
-      next = next.nextBySameArtist;
-    }
-
-    return {previous, next};
-  },
+  query: (contribution) => ({
+    ...getSiblings(contribution),
+  }),
 
   relations: (relation, query, _contribution) => ({
     previousLink:
@@ -53,23 +53,19 @@ export default {
   }),
 
   slots: {
-    kind: {
-      validate: v =>
-        v.is(
-          'album',
-          'bannerArt',
-          'coverArt',
-          'flash',
-          'track',
-          'trackArt',
-          'trackContribution',
-          'wallpaperArt'),
-    },
+    heading: {type: 'html', mutable: false},
+    kind: {type: 'string'},
   },
 
   generate: (data, relations, slots, {html, language}) =>
     language.encapsulate('misc.artistLink.chronology', capsule =>
       html.tags([
+        html.tag('span', {class: 'chronology-heading'},
+          {[html.onlyIfContent]: true},
+          {[html.onlyIfSiblings]: true},
+
+          slots.heading),
+
         html.tags([
           relations.previousLink?.slots({
             attributes: {class: 'chronology-link'},

@@ -13,10 +13,12 @@ export default {
     'generateAlbumSocialEmbed',
     'generateAlbumStyleTags',
     'generateAlbumTrackList',
+    'generateCommentaryContentHeading',
     'generateCommentaryEntry',
     'generateContentContentHeading',
     'generateContentHeading',
     'generatePageLayout',
+    'generateReadCommentaryLine',
     'linkAlbumCommentary',
     'linkAlbumGallery',
   ],
@@ -68,15 +70,21 @@ export default {
         : null),
 
     commentaryLink:
-      ([album, ...album.tracks].some(({commentary}) => !empty(commentary))
+      (album.tracks.some(track => !empty(track.commentary))
         ? relation('linkAlbumCommentary', album)
         : null),
+
+    readCommentaryLine:
+      relation('generateReadCommentaryLine', album),
 
     trackList:
       relation('generateAlbumTrackList', album),
 
     additionalFilesList:
       relation('generateAdditionalFilesList', album.additionalFiles),
+
+    commentaryContentHeading:
+      relation('generateCommentaryContentHeading', album),
 
     artistCommentaryEntries:
       album.commentary
@@ -160,6 +168,10 @@ export default {
 
                 : html.blank()),
 
+              !relations.commentaryLink &&
+              !html.isBlank(relations.artistCommentaryEntries) &&
+                relations.readCommentaryLine,
+
               !html.isBlank(relations.creditSourceEntries) &&
                 language.encapsulate(capsule, 'readCreditingSources', capsule =>
                   language.$(capsule, {
@@ -197,12 +209,7 @@ export default {
             ])),
 
           html.tags([
-            relations.contentContentHeading.clone()
-              .slots({
-                attributes: {id: 'artist-commentary'},
-                string: 'misc.artistCommentary',
-              }),
-
+            relations.commentaryContentHeading,
             relations.artistCommentaryEntries,
           ]),
 

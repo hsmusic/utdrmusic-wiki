@@ -22,9 +22,10 @@ import {
   parseLyrics,
 } from '#yaml';
 
-import {withPropertyFromObject} from '#composite/data';
+import {withPropertyFromList, withPropertyFromObject} from '#composite/data';
 
 import {
+  exitWithoutDependency,
   exposeConstant,
   exposeDependency,
   exposeDependencyOrContinue,
@@ -176,20 +177,20 @@ export class Track extends Thing {
       }),
 
       withPropertyFromAlbum({
-        property: input.value('artistContribs'),
+        property: input.value('trackArtistContribs'),
       }),
 
       withRecontextualizedContributionList({
-        list: '#album.artistContribs',
+        list: '#album.trackArtistContribs',
         artistProperty: input.value('trackArtistContributions'),
       }),
 
       withRedatedContributionList({
-        list: '#album.artistContribs',
+        list: '#album.trackArtistContribs',
         date: '#date',
       }),
 
-      exposeDependency({dependency: '#album.artistContribs'}),
+      exposeDependency({dependency: '#album.trackArtistContribs'}),
     ],
 
     contributorContribs: [
@@ -242,6 +243,32 @@ export class Track extends Thing {
       }),
 
       exposeDependency({dependency: '#album.color'}),
+    ],
+
+    needsLyrics: [
+      exposeUpdateValueOrContinue({
+        mode: input.value('falsy'),
+        validate: input.value(isBoolean),
+      }),
+
+      exitWithoutDependency({
+        dependency: 'lyrics',
+        mode: input.value('empty'),
+        value: input.value(false),
+      }),
+
+      withPropertyFromList({
+        list: 'lyrics',
+        property: input.value('helpNeeded'),
+      }),
+
+      {
+        dependencies: ['#lyrics.helpNeeded'],
+        compute: ({
+          ['#lyrics.helpNeeded']: helpNeeded,
+        }) =>
+          helpNeeded.includes(true)
+      },
     ],
 
     urls: urls(),
@@ -413,6 +440,12 @@ export class Track extends Thing {
 
     // > Expose only
 
+    isTrack: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+
     commentatorArtists: commentatorArtists(),
 
     date: [
@@ -461,6 +494,24 @@ export class Track extends Thing {
     otherReleases: [
       withOtherReleases(),
       exposeDependency({dependency: '#otherReleases'}),
+    ],
+
+    commentaryFromMainRelease: [
+      withMainRelease(),
+
+      exitWithoutDependency({
+        dependency: '#mainRelease',
+        value: input.value([]),
+      }),
+
+      withPropertyFromObject({
+        object: '#mainRelease',
+        property: input.value('commentary'),
+      }),
+
+      exposeDependency({
+        dependency: '#mainRelease.commentary',
+      }),
     ],
 
     groups: [
@@ -548,6 +599,10 @@ export class Track extends Thing {
       },
 
       'Color': {property: 'color'},
+
+      'Needs Lyrics': {
+        property: 'needsLyrics',
+      },
 
       'URLs': {property: 'urls'},
 

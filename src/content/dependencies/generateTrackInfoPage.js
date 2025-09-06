@@ -13,6 +13,7 @@ export default {
     'generateContributionList',
     'generateLyricsSection',
     'generatePageLayout',
+    'generateReadCommentaryLine',
     'generateTrackArtistCommentarySection',
     'generateTrackArtworkColumn',
     'generateTrackInfoPageFeaturedByFlashesList',
@@ -86,6 +87,9 @@ export default {
     releaseInfo:
       relation('generateTrackReleaseInfo', track),
 
+    readCommentaryLine:
+      relation('generateReadCommentaryLine', track),
+
     otherReleasesList:
       relation('generateTrackInfoPageOtherReleasesList', track),
 
@@ -144,6 +148,9 @@ export default {
 
     dateAlbumAddedToWiki:
       track.album.dateAddedToWiki,
+
+    needsLyrics:
+      track.needsLyrics,
 
     singleTrackSingle:
       query.singleTrackSingle,
@@ -205,14 +212,19 @@ export default {
                         language.$(capsule, 'link')),
                   })),
 
-              !html.isBlank(relations.artistCommentarySection) &&
-                language.encapsulate(capsule, 'readCommentary', capsule =>
-                  language.$(capsule, {
-                    link:
-                      html.tag('a',
-                        {href: '#artist-commentary'},
-                        language.$(capsule, 'link')),
-                  })),
+              (!html.isBlank(relations.additionalFilesList) ||
+               !html.isBlank(relations.contributorContributionList) ||
+               !html.isBlank(relations.creditingSourceEntries) ||
+               !html.isBlank(relations.flashesThatFeatureList) ||
+               !html.isBlank(relations.lyricsSection) ||
+               !html.isBlank(relations.midiProjectFilesList) ||
+               !html.isBlank(relations.referencedByTracksList) ||
+               !html.isBlank(relations.referencedTracksList) ||
+               !html.isBlank(relations.referencingSourceEntries) ||
+               !html.isBlank(relations.sampledByTracksList) ||
+               !html.isBlank(relations.sampledTracksList) ||
+               !html.isBlank(relations.sheetMusicFilesList)) &&
+                relations.readCommentaryLine,
 
               !html.isBlank(relations.creditingSourceEntries) &&
                 language.encapsulate(capsule, 'readCreditingSources', capsule =>
@@ -356,10 +368,15 @@ export default {
 
           data.firstTrackInSingle &&
           (!html.isBlank(relations.lyricsSection) ||
-           !html.isBlank(relations.artistCommentaryEntries) ||
+           !html.isBlank(relations.artistCommentarySection) ||
            !html.isBlank(relations.creditingSourceEntries) ||
            !html.isBlank(relations.referencingSourceEntries)) &&
             html.tag('hr', {class: 'main-separator'}),
+
+          data.needsLyrics &&
+          html.isBlank(relations.lyricsSection) &&
+            html.tag('p',
+              language.$(pageCapsule, 'needsLyrics')),
 
           relations.lyricsSection,
 
@@ -438,7 +455,7 @@ export default {
 
         secondaryNav:
           relations.secondaryNav
-            .slot('mode', data.singleTrackSingle ? 'album' : 'track'),
+            .slot('mode', data.firstTrackInSingle ? 'album' : 'track'),
 
         leftSidebar: relations.sidebar,
 

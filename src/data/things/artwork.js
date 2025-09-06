@@ -25,7 +25,7 @@ import {
   parseDimensions,
 } from '#yaml';
 
-import {withPropertyFromObject} from '#composite/data';
+import {withPropertyFromList, withPropertyFromObject} from '#composite/data';
 
 import {
   exitWithoutDependency,
@@ -55,8 +55,10 @@ import {
 } from '#composite/wiki-properties';
 
 import {
+  withArtTags,
   withAttachedArtwork,
   withContainingArtworkList,
+  withContentWarningArtTags,
   withContribsFromAttachedArtwork,
   withPropertyFromAttachedArtwork,
   withDate,
@@ -78,6 +80,7 @@ export class Artwork extends Thing {
     label: simpleString(),
     source: contentString(),
     originDetails: contentString(),
+    showFilename: simpleString(),
 
     dateFromThingProperty: simpleString(),
 
@@ -206,49 +209,20 @@ export class Artwork extends Thing {
       }),
     ],
 
+    style: simpleString(),
+
     artTagsFromThingProperty: simpleString(),
 
     artTags: [
-      withResolvedReferenceList({
-        list: input.updateValue({
+      withArtTags({
+        from: input.updateValue({
           validate:
             validateReferenceList(ArtTag[Thing.referenceType]),
         }),
-
-        find: soupyFind.input('artTag'),
       }),
 
-      exposeDependencyOrContinue({
-        dependency: '#resolvedReferenceList',
-        mode: input.value('empty'),
-      }),
-
-      withPropertyFromAttachedArtwork({
-        property: input.value('artTags'),
-      }),
-
-      exposeDependencyOrContinue({
-        dependency: '#attachedArtwork.artTags',
-      }),
-
-      exitWithoutDependency({
-        dependency: 'artTagsFromThingProperty',
-        value: input.value([]),
-      }),
-
-      withPropertyFromObject({
-        object: 'thing',
-        property: 'artTagsFromThingProperty',
-      }).outputs({
-        ['#value']: '#artTags',
-      }),
-
-      exposeDependencyOrContinue({
+      exposeDependency({
         dependency: '#artTags',
-      }),
-
-      exposeConstant({
-        value: input.value([]),
       }),
     ],
 
@@ -323,6 +297,12 @@ export class Artwork extends Thing {
 
     // Expose only
 
+    isArtwork: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+
     referencedByArtworks: reverseReferenceList({
       reverse: soupyReverse.input('artworksWhichReference'),
     }),
@@ -386,6 +366,27 @@ export class Artwork extends Thing {
         value: input.value([]),
       }),
     ],
+
+    contentWarningArtTags: [
+      withContentWarningArtTags(),
+
+      exposeDependency({
+        dependency: '#contentWarningArtTags',
+      }),
+    ],
+
+    contentWarnings: [
+      withContentWarningArtTags(),
+
+      withPropertyFromList({
+        list: '#contentWarningArtTags',
+        property: input.value('name'),
+      }),
+
+      exposeDependency({
+        dependency: '#contentWarningArtTags.name',
+      }),
+    ],
   });
 
   static [Thing.yamlDocumentSpec] = {
@@ -401,6 +402,7 @@ export class Artwork extends Thing {
       'Label': {property: 'label'},
       'Source': {property: 'source'},
       'Origin Details': {property: 'originDetails'},
+      'Show Filename': {property: 'showFilename'},
 
       'Date': {
         property: 'date',
@@ -413,6 +415,8 @@ export class Artwork extends Thing {
         property: 'artistContribs',
         transform: parseContributors,
       },
+
+      'Style': {property: 'style'},
 
       'Tags': {property: 'artTags'},
 

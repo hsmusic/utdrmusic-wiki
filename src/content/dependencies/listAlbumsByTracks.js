@@ -10,13 +10,20 @@ export default {
   },
 
   query({albumData}, spec) {
-    const albums = sortAlphabetically(albumData.slice());
-    const counts = albums.map(album => album.tracks.length);
+    const albums =
+      sortAlphabetically(
+        albumData.filter(album => !album.hideDuration));
+
+    const counts =
+      albums.map(album => album.tracks.length);
 
     filterByCount(albums, counts);
     sortByCount(albums, counts, {greatestFirst: true});
 
-    return {spec, albums, counts};
+    const styles =
+      albums.map(album => album.style);
+
+    return {spec, albums, counts, styles};
   },
 
   relations(relation, query) {
@@ -32,6 +39,7 @@ export default {
   data(query) {
     return {
       counts: query.counts,
+      styles: query.styles,
     };
   },
 
@@ -42,10 +50,19 @@ export default {
         stitchArrays({
           link: relations.albumLinks,
           count: data.counts,
-        }).map(({link, count}) => ({
-            album: link,
-            tracks: language.countTracks(count, {unit: true}),
-          })),
+          style: data.styles,
+        }).map(({link, count, style}) => {
+            const row = {
+              album: link,
+              tracks: language.countTracks(count, {unit: true}),
+            };
+
+            if (style === 'single') {
+              row.stringsKey = 'single';
+            }
+
+            return row;
+          }),
     });
   },
 };

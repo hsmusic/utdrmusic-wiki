@@ -109,6 +109,12 @@ export class ContentEntry extends Thing {
 
     // Expose only
 
+    isContentEntry: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+
     annotationParts: [
       withAnnotationParts({
         mode: input.value('strings'),
@@ -151,6 +157,12 @@ export class CommentaryEntry extends ContentEntry {
   static [Thing.getPropertyDescriptors] = () => ({
     // Expose only
 
+    isCommentaryEntry: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+
     isWikiEditorCommentary: hasAnnotationPart({
       part: input.value('wiki editor'),
     }),
@@ -165,8 +177,18 @@ export class LyricsEntry extends ContentEntry {
 
     // Expose only
 
+    isLyricsEntry: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+
     isWikiLyrics: hasAnnotationPart({
       part: input.value('wiki lyrics'),
+    }),
+
+    helpNeeded: hasAnnotationPart({
+      part: input.value('help needed'),
     }),
 
     hasSquareBracketAnnotations: [
@@ -200,6 +222,26 @@ export class LyricsEntry extends ContentEntry {
   });
 }
 
-export class CreditingSourcesEntry extends ContentEntry {}
+export class CreditingSourcesEntry extends ContentEntry {
+  static [Thing.getPropertyDescriptors] = () => ({
+    // Expose only
 
-export class ReferencingSourcesEntry extends ContentEntry {}
+    isCreditingSourcesEntry: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+  });
+}
+
+export class ReferencingSourcesEntry extends ContentEntry {
+  static [Thing.getPropertyDescriptors] = () => ({
+    // Expose only
+
+    isReferencingSourceEntry: [
+      exposeConstant({
+        value: input.value(true),
+      }),
+    ],
+  });
+}
