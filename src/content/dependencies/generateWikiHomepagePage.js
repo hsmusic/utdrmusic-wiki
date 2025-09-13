@@ -72,8 +72,10 @@ export default {
               collapsible: false,
 
               content:
-                relations.customSidebarContent
-                  .slot('mode', 'multiline'),
+                relations.customSidebarContent.slots({
+                  mode: 'multiline',
+                  indicateExternalLinks: false,
+                }),
             }),
 
             relations.newsSidebarBox,
