@@ -3234,7 +3234,7 @@ video.pixelate, .pixelate video {
 .grid-actions > .grid-item {
   flex-basis: unset !important;
   margin: 5px;
-  width: 120px;
+  width: 16ex;
   --primary-color: inherit !important;
   --dim-color: inherit !important;
 }
