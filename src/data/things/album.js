@@ -10,8 +10,16 @@ import {traverse} from '#node-utils';
 import {sortAlbumsTracksChronologically, sortChronologically} from '#sort';
 import {empty} from '#sugar';
 import Thing from '#thing';
-import {is, isColor, isContributionList, isDate, isDirectory, isNumber}
-  from '#validators';
+
+import {
+  is,
+  isBoolean,
+  isColor,
+  isContributionList,
+  isDate,
+  isDirectory,
+  isNumber,
+} from '#validators';
 
 import {
   parseAdditionalFiles,
@@ -144,6 +152,8 @@ export class Album extends Thing {
       artistProperty: input.value('albumArtistContributions'),
     }),
 
+    trackArtistText: contentString(),
+
     trackArtistContribs: [
       withResolvedContribs({
         from: input.updateValue({validate: isContributionList}),
@@ -174,6 +184,8 @@ export class Album extends Thing {
     // > Update & expose - General configuration
 
     countTracksInArtistTotals: flag(true),
+
+    showAlbumInTracksWithoutArtists: flag(false),
 
     hasTrackNumbers: flag(true),
     isListedOnHomepage: flag(true),
@@ -638,6 +650,10 @@ export class Album extends Thing {
         transform: parseContributors,
       },
 
+      'Track Artist Text': {
+        property: 'trackArtistText',
+      },
+
       'Track Artists': {
         property: 'trackArtistContribs',
         transform: parseContributors,
@@ -646,6 +662,10 @@ export class Album extends Thing {
       // General configuration
 
       'Count Tracks In Artist Totals': {property: 'countTracksInArtistTotals'},
+
+      'Show Album In Tracks Without Artists': {
+        property: 'showAlbumInTracksWithoutArtists',
+      },
 
       'Has Track Numbers': {property: 'hasTrackNumbers'},
       'Listed on Homepage': {property: 'isListedOnHomepage'},
@@ -1045,6 +1065,21 @@ export class TrackSection extends Thing {
 
     dateOriginallyReleased: simpleDate(),
 
+    countTracksInArtistTotals: [
+      exposeUpdateValueOrContinue({
+        validate: input.value(isBoolean),
+      }),
+
+      withAlbum(),
+
+      withPropertyFromObject({
+        object: '#album',
+        property: input.value('countTracksInArtistTotals'),
+      }),
+
+      exposeDependency({dependency: '#album.countTracksInArtistTotals'}),
+    ],
+
     isDefaultTrackSection: flag(false),
 
     description: contentString(),
@@ -1138,6 +1173,8 @@ export class TrackSection extends Thing {
         property: 'dateOriginallyReleased',
         transform: parseDate,
       },
+
+      'Count Tracks In Artist Totals': {property: 'countTracksInArtistTotals'},
 
       'Description': {property: 'description'},
     },

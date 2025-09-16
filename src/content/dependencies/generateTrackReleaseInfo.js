@@ -1,7 +1,10 @@
+import {compareArrays} from '#sugar';
+
 export default {
   contentDependencies: [
     'generateReleaseInfoContributionsLine',
     'generateReleaseInfoListenLine',
+    'linkAlbum',
   ],
 
   extraDependencies: ['html', 'language'],
@@ -10,10 +13,15 @@ export default {
     const relations = {};
 
     relations.artistContributionsLine =
-      relation('generateReleaseInfoContributionsLine', track.artistContribs);
+      relation('generateReleaseInfoContributionsLine',
+        track.artistContribs,
+        track.artistText);
 
     relations.listenLine =
       relation('generateReleaseInfoListenLine', track);
+
+    relations.albumLink =
+      relation('linkAlbum', track.album);
 
     return relations;
   },
@@ -24,6 +32,16 @@ export default {
     data.name = track.name;
     data.date = track.date;
     data.duration = track.duration;
+
+    const {album} = track;
+
+    data.showAlbum =
+      album.showAlbumInTracksWithoutArtists &&
+      track.artistContribs.every(({annotation}) => !annotation) &&
+      compareArrays(
+        track.artistContribs.map(({artist}) => artist),
+        album.artistContribs.map(({artist}) => artist),
+        {checkOrder: true});
 
     if (
       track.hasUniqueCoverArt &&
@@ -43,10 +61,21 @@ export default {
           {[html.joinChildren]: html.tag('br')},
 
           [
-            relations.artistContributionsLine.slots({
-              stringKey: capsule + '.by',
-              featuringStringKey: capsule + '.by.featuring',
-              chronologyKind: 'track',
+            language.encapsulate(capsule, 'by', capsule => {
+              const withAlbum =
+                (data.showAlbum ? '.withAlbum' : '');
+
+              const albumOptions =
+                (data.showAlbum ? {album: relations.albumLink} : {});
+
+              return relations.artistContributionsLine.slots({
+                stringKey: capsule + withAlbum,
+                featuringStringKey: capsule + '.featuring' + withAlbum,
+
+                additionalStringOptions: albumOptions,
+
+                chronologyKind: 'track',
+              });
             }),
 
             language.$(capsule, 'released', {

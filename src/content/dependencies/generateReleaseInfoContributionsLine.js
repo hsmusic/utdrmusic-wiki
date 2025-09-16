@@ -2,14 +2,16 @@ export default {
   contentDependencies: ['generateArtistCredit'],
   extraDependencies: ['html'],
 
-  relations: (relation, contributions) => ({
+  relations: (relation, contributions, formatText) => ({
     credit:
-      relation('generateArtistCredit', contributions, []),
+      relation('generateArtistCredit', contributions, [], formatText),
   }),
 
   slots: {
     stringKey: {type: 'string'},
     featuringStringKey: {type: 'string'},
+
+    additionalStringOptions: {validate: v => v.isObject},
 
     chronologyKind: {type: 'string'},
   },
@@ -27,5 +29,6 @@ export default {
 
       normalStringKey: slots.stringKey,
       normalFeaturingStringKey: slots.featuringStringKey,
+      additionalStringOptions: slots.additionalStringOptions,
     }),
 };
