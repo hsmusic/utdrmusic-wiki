@@ -79,7 +79,14 @@ export default {
   ],
 
   sprawl(wikiData, content) {
-    const find = bindFind(wikiData, {mode: 'quiet'});
+    const find =
+      bindFind(wikiData, {
+        mode: 'quiet',
+        fuzz: {
+          capitalization: true,
+          kebab: true,
+        },
+      });
 
     const {result: parsedNodes, error} =
       parseContentNodes(content ?? '', {errorMode: 'return'});
@@ -89,6 +96,20 @@ export default {
 
       nodes: parsedNodes
         .map(node => {
+          if (node.type === 'tooltip') {
+            return {
+              i: node.i,
+              iEnd: node.iEnd,
+              type: 'tooltip',
+              data: {
+                // No recursion yet. Sorry!
+                tooltip: node.data.content[0].data,
+                label: node.data.label[0].data,
+                link: null,
+              },
+            };
+          }
+
           if (node.type !== 'tag') {
             return node;
           }
@@ -148,9 +169,16 @@ export default {
 
             data.label =
               enteredLabel ??
-                (transformName && data.thing.name
-                  ? transformName(data.thing.name, node, content)
-                  : null);
+
+              (transformName && data.thing.name &&
+               replacerKeyImplied && replacerValue === data.thing.name
+
+                ? transformName(data.thing.name, node, content)
+                : null) ??
+
+              (replacerKeyImplied
+                ? replacerValue
+                : null);
 
             data.hash = enteredHash ?? null;
 
