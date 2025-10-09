@@ -1,13 +1,4 @@
 export default {
-  contentDependencies: [
-    'generateColorStyleAttribute',
-    'generateTextWithTooltip',
-    'generateTooltip',
-    'linkTemplate',
-  ],
-
-  extraDependencies: ['html', 'language'],
-
   relations: (relation, _pathKey, thing) => ({
     linkTemplate:
       relation('linkTemplate'),
@@ -20,11 +11,15 @@ export default {
 
     tooltip:
       relation('generateTooltip'),
+
+    name:
+      relation('generateName', thing),
   }),
 
   data: (pathKey, thing) => ({
     name: thing.name,
     nameShort: thing.nameShort ?? thing.shortName,
+    nameText: thing.nameText,
 
     path:
       (pathKey
@@ -75,7 +70,7 @@ export default {
     hash: {type: 'string'},
   },
 
-  generate(data, relations, slots, {html, language}) {
+  generate(data, relations, slots, {html}) {
     const path =
       slots.path ?? data.path;
 
@@ -83,14 +78,12 @@ export default {
     const wrapperAttributes = html.attributes();
 
     const showShortName =
-      (slots.preferShortName
-        ? data.nameShort && data.nameShort !== data.name
-        : false);
+      slots.preferShortName &&
+     !data.nameText &&
+      data.nameShort &&
+      data.nameShort !== data.name;
 
-    const name =
-      (showShortName
-        ? data.nameShort
-        : data.name);
+    const name = relations.name;
 
     const showWikiTooltip =
       (slots.tooltipStyle === 'auto'
@@ -114,7 +107,7 @@ export default {
 
     const content =
       (html.isBlank(slots.content)
-        ? language.sanitize(name)
+        ? name
         : slots.content);
 
     if (slots.color !== false) {

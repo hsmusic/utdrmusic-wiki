@@ -58,26 +58,6 @@ function getArg(node, argKey) {
 }
 
 export default {
-  contentDependencies: [
-    ...(
-      Object.values(replacerSpec)
-        .map(description => description.link)
-        .filter(Boolean)),
-
-    'image',
-    'generateTextWithTooltip',
-    'generateTooltip',
-    'linkExternal',
-  ],
-
-  extraDependencies: [
-    'html',
-    'language',
-    'niceShowAggregate',
-    'to',
-    'wikiData',
-  ],
-
   sprawl(wikiData, content) {
     const find =
       bindFind(wikiData, {
@@ -891,8 +871,8 @@ export default {
         extractNonTextNodes()
           // Compress multiple line breaks into single line breaks,
           // except when they're preceding or following indented
-          // text (by at least two spaces).
-          .replace(/(?<!  .*)\n{2,}(?!^  )/gm, '\n') /* eslint-disable-line no-regex-spaces */
+          // text (by at least two spaces) or blockquotes.
+          .replace(/(?<!^  .*|^>.*)\n{2,}(?!^  |^>)/gm, '\n') /* eslint-disable-line no-regex-spaces */
           // Expand line breaks which don't follow a list, quote,
           // or <br> / "  ", and which don't precede or follow
           // indented text (by at least two spaces).

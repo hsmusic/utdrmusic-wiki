@@ -510,6 +510,20 @@ export class Album extends Thing {
           : [album.name]),
     },
 
+    albumSinglesOnly: {
+      referencing: ['album'],
+
+      bindTo: 'albumData',
+
+      incldue: album =>
+        album.style === 'single',
+
+      getMatchableNames: album =>
+        (album.alwaysReferenceByDirectory
+          ? []
+          : [album.name]),
+    },
+
     albumWithArtwork: {
       referenceTypes: [
         'album',
@@ -523,8 +537,8 @@ export class Album extends Thing {
         album.hasCoverArt,
 
       getMatchableNames: album =>
-        (album.alwaysReferenceByDirectory 
-          ? [] 
+        (album.alwaysReferenceByDirectory
+          ? []
           : [album.name]),
     },
 
@@ -832,11 +846,6 @@ export class Album extends Thing {
         'Crediting Sources',
       ]},
 
-      {message: `Move referencing sources on singles to the track`, fields: [
-        ['Style', 'single'],
-        'Referencing Sources',
-      ]},
-
       {message: `Move additional names on singles to the track`, fields: [
         ['Style', 'single'],
         'Additional Names',
@@ -1040,6 +1049,36 @@ export class TrackSection extends Thing {
 
     unqualifiedDirectory: directory(),
 
+    directorySuffix: [
+      exposeUpdateValueOrContinue({
+        validate: input.value(isDirectory),
+      }),
+
+      withAlbum(),
+
+      withPropertyFromObject({
+        object: '#album',
+        property: input.value('directorySuffix'),
+      }),
+
+      exposeDependency({dependency: '#album.directorySuffix'}),
+    ],
+
+    suffixTrackDirectories: [
+      exposeUpdateValueOrContinue({
+        validate: input.value(isBoolean),
+      }),
+
+      withAlbum(),
+
+      withPropertyFromObject({
+        object: '#album',
+        property: input.value('suffixTrackDirectories'),
+      }),
+
+      exposeDependency({dependency: '#album.suffixTrackDirectories'}),
+    ],
+
     color: [
       exposeUpdateValueOrContinue({
         validate: input.value(isColor),
@@ -1166,6 +1205,9 @@ export class TrackSection extends Thing {
   static [Thing.yamlDocumentSpec] = {
     fields: {
       'Section': {property: 'name'},
+      'Directory Suffix': {property: 'directorySuffix'},
+      'Suffix Track Directories': {property: 'suffixTrackDirectories'},
+
       'Color': {property: 'color'},
       'Start Counting From': {property: 'startCountingFrom'},
 

@@ -12,6 +12,7 @@ import {
   isContributionList,
   isDate,
   isFileExtension,
+  validateReference,
 } from '#validators';
 
 import {
@@ -49,6 +50,7 @@ import {
 import {
   commentatorArtists,
   constitutibleArtworkList,
+  contentString,
   contributionList,
   dimensions,
   directory,
@@ -60,7 +62,6 @@ import {
   reverseReferenceList,
   simpleDate,
   simpleString,
-  singleReference,
   soupyFind,
   soupyReverse,
   thing,
@@ -70,17 +71,18 @@ import {
 } from '#composite/wiki-properties';
 
 import {
+  alwaysReferenceByDirectory,
   exitWithoutUniqueCoverArt,
   inheritContributionListFromMainRelease,
   inheritFromMainRelease,
   withAllReleases,
-  withAlwaysReferenceByDirectory,
   withContainingTrackSection,
   withCoverArtistContribs,
   withDate,
   withDirectorySuffix,
   withHasUniqueCoverArt,
   withMainRelease,
+  withMainReleaseTrack,
   withOtherReleases,
   withPropertyFromAlbum,
   withSuffixDirectoryFromAlbum,
@@ -112,6 +114,7 @@ export class Track extends Thing {
     // > Update & expose - Identifying metadata
 
     name: name('Unnamed Track'),
+    nameText: contentString(),
 
     directory: [
       withDirectorySuffix(),
@@ -143,15 +146,23 @@ export class Track extends Thing {
       })
     ],
 
-    alwaysReferenceByDirectory: [
-      withAlwaysReferenceByDirectory(),
-      exposeDependency({dependency: '#alwaysReferenceByDirectory'}),
-    ],
+    alwaysReferenceByDirectory: alwaysReferenceByDirectory(),
 
-    mainReleaseTrack: singleReference({
-      class: input.value(Track),
-      find: soupyFind.input('track'),
-    }),
+    // Album or track. The exposed value is really just what's provided here,
+    // whether or not a matching track is found on a provided album, for
+    // example. When presenting or processing, read `mainReleaseTrack`.
+    mainRelease: [
+      withMainRelease({
+        from: input.updateValue({
+          validate:
+            validateReference(['album', 'track']),
+        }),
+      }),
+
+      exposeDependency({
+        dependency: '#mainRelease',
+      }),
+    ],
 
     bandcampTrackIdentifier: simpleString(),
     bandcampArtworkIdentifier: simpleString(),
@@ -389,7 +400,7 @@ export class Track extends Thing {
 
       referenceList({
         class: input.value(Track),
-        find: soupyFind.input('track'),
+        find: soupyFind.input('trackMainReleasesOnly'),
       }),
     ],
 
@@ -400,7 +411,7 @@ export class Track extends Thing {
 
       referenceList({
         class: input.value(Track),
-        find: soupyFind.input('track'),
+        find: soupyFind.input('trackMainReleasesOnly'),
       }),
     ],
 
@@ -453,11 +464,6 @@ export class Track extends Thing {
       class: input.value(Artwork),
     }),
 
-    // used for withAlwaysReferenceByDirectory (for some reason)
-    trackData: wikiData({
-      class: input.value(Track),
-    }),
-
     // used for withMatchingContributionPresets (indirectly by Contribution)
     wikiInfo: thing({
       class: input.value(WikiInfo),
@@ -489,19 +495,27 @@ export class Track extends Thing {
     ],
 
     isMainRelease: [
-      withMainRelease(),
+      withMainReleaseTrack(),
 
       exposeWhetherDependencyAvailable({
-        dependency: '#mainRelease',
+        dependency: '#mainReleaseTrack',
         negate: input.value(true),
       }),
     ],
 
     isSecondaryRelease: [
-      withMainRelease(),
+      withMainReleaseTrack(),
 
       exposeWhetherDependencyAvailable({
-        dependency: '#mainRelease',
+        dependency: '#mainReleaseTrack',
+      }),
+    ],
+
+    mainReleaseTrack: [
+      withMainReleaseTrack(),
+
+      exposeDependency({
+        dependency: '#mainReleaseTrack',
       }),
     ],
 
@@ -522,20 +536,20 @@ export class Track extends Thing {
     ],
 
     commentaryFromMainRelease: [
-      withMainRelease(),
+      withMainReleaseTrack(),
 
       exitWithoutDependency({
-        dependency: '#mainRelease',
+        dependency: '#mainReleaseTrack',
         value: input.value([]),
       }),
 
       withPropertyFromObject({
-        object: '#mainRelease',
+        object: '#mainReleaseTrack',
         property: input.value('commentary'),
       }),
 
       exposeDependency({
-        dependency: '#mainRelease.commentary',
+        dependency: '#mainReleaseTrack.commentary',
       }),
     ],
 
@@ -567,10 +581,11 @@ export class Track extends Thing {
       // Identifying metadata
 
       'Track': {property: 'name'},
+      'Track Text': {property: 'nameText'},
       'Directory': {property: 'directory'},
       'Suffix Directory': {property: 'suffixDirectoryFromAlbum'},
       'Always Reference By Directory': {property: 'alwaysReferenceByDirectory'},
-      'Main Release': {property: 'mainReleaseTrack'},
+      'Main Release': {property: 'mainRelease'},
 
       'Bandcamp Track ID': {
         property: 'bandcampTrackIdentifier',
@@ -797,7 +812,7 @@ export class Track extends Thing {
       bindTo: 'trackData',
 
       include: track =>
-        !CacheableObject.getUpdateValue(track, 'mainReleaseTrack'),
+        !CacheableObject.getUpdateValue(track, 'mainRelease'),
 
       // It's still necessary to check alwaysReferenceByDirectory here, since
       // it may be set manually (with `Always Reference By Directory: true`),
@@ -956,7 +971,7 @@ export class Track extends Thing {
 
     parts.push(Thing.prototype[inspect.custom].apply(this));
 
-    if (CacheableObject.getUpdateValue(this, 'mainReleaseTrack')) {
+    if (CacheableObject.getUpdateValue(this, 'mainRelease')) {
       parts.unshift(`${colors.yellow('[secrelease]')} `);
     }
 

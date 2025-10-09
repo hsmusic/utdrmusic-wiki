@@ -1,17 +1,24 @@
 export default {
-  contentDependencies: ['generateAdditionalNamesBoxItem'],
-  extraDependencies: ['html', 'language'],
-
   relations: (relation, additionalNames) => ({
     items:
       additionalNames
         .map(entry => relation('generateAdditionalNamesBoxItem', entry)),
   }),
 
-  generate: (relations, {html, language}) =>
+  slots: {
+    alwaysVisible: {
+      type: 'boolean',
+      default: false,
+    },
+  },
+
+  generate: (relations, slots, {html, language}) =>
     html.tag('div', {id: 'additional-names-box'},
       {class: 'drop'},
       {[html.onlyIfContent]: true},
+
+      slots.alwaysVisible &&
+        {class: 'always-visible'},
 
       [
         html.tag('p',

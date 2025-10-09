@@ -97,16 +97,6 @@ count:
       many: ""
       other: "{CONTRIBUTIONS} contributions"
 
-  coverArts:
-    _: "{COVER_ARTS}"
-    withUnit:
-      zero: ""
-      one: "{COVER_ARTS} cover art"
-      two: ""
-      few: ""
-      many: ""
-      other: "{COVER_ARTS} cover arts"
-
   flashes:
     _: "{FLASHES}"
     withUnit:
@@ -299,7 +289,17 @@ releaseInfo:
 
   note: "Context notes:"
 
-  alsoReleasedOn: "Also released on {ALBUMS}."
+  alsoReleased:
+    onAlbums: >-
+      Also released on {ALBUMS}.
+
+    asSingle: >-
+      Also released {SINGLE}.
+
+    onAlbums.asSingle: >-
+      Also released on {ALBUMS}, and {SINGLE}.
+
+    single: "as a single"
 
   tracksReferenced:
     _: "Tracks that {TRACK} references:"
@@ -608,42 +608,10 @@ misc:
         trackContribution: "track contribution"
         wallpaperArt: "wallpaper art"
 
-  # chronology:
-  #
-  #   "Chronology links" are a section that appear in the nav bar for
-  #   most things with individual contributors across the wiki! These
-  #   allow for quick navigation between older and newer releases of
-  #   a given artist, or seeing at a glance how many contributions an
-  #   artist made before the one you're currently viewing.
-  #
-  #   Chronology information is described for each artist and shows
-  #   the kind of thing which is being contributed to, since all of
-  #   the entries are displayed together in one list.
-  #
-
-  chronology:
-
-    # seeArtistPages:
-    #   If the thing you're viewing has a lot of contributors, their
-    #   chronology info will be exempt from the nav bar, which'll
-    #   show this message instead.
-
-    seeArtistPages: "(See artist pages for chronology info!)"
-
-    # withNavigation:
-    #   Navigation refers to previous/next links.
-
-    withNavigation: "{HEADING} ({NAVIGATION})"
-
-    heading:
-      coverArt: "{INDEX} cover art by {ARTIST}"
-      flash: "{INDEX} flash/game by {ARTIST}"
-      track: "{INDEX} track by {ARTIST}"
-      trackArt: "{INDEX} track art by {ARTIST}"
-      onlyIndex: "Only"
-
   creditingSources:
-    _: "Crediting sources for {THING}:"
+    _: "{CUE} for {THING}:"
+    collapsed: "{CUE} for {THING}…"
+    cue: "Crediting sources"
     sticky: "Crediting sources:"
 
   # external:
@@ -881,7 +849,9 @@ misc:
       track: "Tracks"
 
   referencingSources:
-    _: "Referencing sources for {THING}:"
+    _: "{CUE} for {THING}:"
+    collapsed: "{CUE} for {THING}…"
+    cue: "Referencing sources"
     sticky: "Referencing sources:"
 
   # skippers:
@@ -2575,12 +2545,6 @@ trackPage:
     track:
       _: "{TRACK}"
       withNumber: "{NUMBER}. {TRACK}"
-
-    chronology:
-      scope:
-        title: "Chronology links {SCOPE}"
-        wiki: "across this wiki"
-        album: "within this album"
 
   needsLyrics: >-
     This track has vocals, but there aren't lyrics available for it on this wiki, yet!

@@ -1,29 +1,9 @@
+import striptags from 'striptags';
+
 import {openAggregate} from '#aggregate';
 import {atOffset, empty, repeat} from '#sugar';
 
 export default {
-  contentDependencies: [
-    'generateColorStyleTag',
-    'generateFooterLocalizationLinks',
-    'generateImageOverlay',
-    'generatePageSidebar',
-    'generateSearchSidebarBox',
-    'generateStaticURLStyleTag',
-    'generateStickyHeadingContainer',
-    'generateWikiWallpaperStyleTag',
-    'transformContent',
-  ],
-
-  extraDependencies: [
-    'getColors',
-    'html',
-    'language',
-    'pagePath',
-    'pagePathStringFromRoot',
-    'to',
-    'wikiData',
-  ],
-
   sprawl: ({wikiInfo}) => ({
     enableSearch: wikiInfo.enableSearch,
     footerContent: wikiInfo.footerContent,
@@ -296,12 +276,17 @@ export default {
     const titleContentsHTML =
       (html.isBlank(slots.title)
         ? null
-     : html.isBlank(slots.additionalNames)
-        ? language.sanitize(slots.title)
-        : html.tag('a', {
+
+     : (!html.isBlank(slots.additionalNames) &&
+        !html.resolve(slots.additionalNames, {slots: ['alwaysVisible']})
+          .getSlotValue('alwaysVisible'))
+
+        ? html.tag('a', {
             href: '#additional-names-box',
             title: language.$('misc.additionalNames.tooltip').toString(),
-          }, language.sanitize(slots.title)));
+          }, language.sanitize(slots.title))
+
+        : language.sanitize(slots.title));
 
     const titleHTML =
       (html.isBlank(slots.title)
@@ -671,11 +656,25 @@ export default {
               language.encapsulate('misc.pageTitle', workingCapsule => {
                 const workingOptions = {};
 
-                workingOptions.title = slots.title;
+                // Slightly jank: The output of striptags is, of course, a string,
+                // and as far as language.formatString() is concerned, that means
+                // it needs to be sanitized - including turning ampersands into
+                // &amp;'s. But the title is already HTML that has implicitly been
+                // sanitized, however it got here, and includes HTML entities that
+                // are properly escaped. Those need to get included as they are,
+                // so we wrap the title in a tag and pass it off as good to go.
+                workingOptions.title =
+                  html.tags([
+                    striptags(slots.title.toString()),
+                  ]);
 
                 if (!html.isBlank(slots.subtitle)) {
+                  // Same shenanigans here, as far as wrapping striptags goes.
                   workingCapsule += '.withSubtitle';
-                  workingOptions.subtitle = slots.subtitle;
+                  workingOptions.subtitle =
+                    html.tags([
+                      striptags(slots.subtitle.toString()),
+                    ]);
                 }
 
                 const showWikiName =

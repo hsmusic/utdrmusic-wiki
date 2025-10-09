@@ -11,6 +11,7 @@ import Thing from '#thing';
 import thingConstructors from '#things';
 
 import {
+  annotateError,
   annotateErrorWithIndex,
   conditionallySuppressError,
   decorateErrorWithIndex,
@@ -165,6 +166,69 @@ function getFieldPropertyMessage(yamlDocumentSpec, property) {
   return fieldPropertyMessage;
 }
 
+function decoAnnotateFindErrors(findFn) {
+  function annotateMultipleNameMatchesIncludingUnfortunatelyUnsecondary(error) {
+    const matches = error[Symbol.for('hsmusic.find.multipleNameMatches')];
+    if (!matches) return;
+
+    const notSoSecondary =
+      matches
+        .map(match => match.thing ?? match)
+        .filter(match =>
+          match.isTrack &&
+          match.isMainRelease &&
+          CacheableObject.getUpdateValue(match, 'mainRelease'));
+
+    if (empty(notSoSecondary)) return;
+
+    let {message} = error;
+    message += (message.includes('\n') ? '\n\n' : '\n');
+    message += colors.bright(colors.yellow('<!>')) + ' ';
+    message += colors.yellow(`Some of these tracks are meant to be secondary releases,`) + '\n';
+    message += ' '.repeat(4);
+    message += colors.yellow(`but another error is keeping that from processing correctly!`) + '\n';
+    message += ' '.repeat(4);
+    message += colors.yellow(`Probably look for an error to do with "Main Release", first.`);
+    Object.assign(error, {message});
+  }
+
+  return (...args) => {
+    try {
+      return findFn(...args);
+    } catch (caughtError) {
+      throw annotateError(caughtError, ...[
+        annotateMultipleNameMatchesIncludingUnfortunatelyUnsecondary,
+      ]);
+    }
+  };
+}
+
+function decoSuppressFindErrors(findFn, {property}) {
+  void property;
+
+  return conditionallySuppressError(_error => {
+    // We're not suppressing any errors at the moment.
+    // An old suppression is kept below for reference.
+
+    /*
+    if (property === 'sampledTracks') {
+      // Suppress "didn't match anything" errors in particular, just for samples.
+      // In hsmusic-data we have a lot of "stub" sample data which don't have
+      // corresponding tracks yet, so it won't be useful to report such reference
+      // errors until we take the time to address that. But other errors, like
+      // malformed reference strings or miscapitalized existing tracks, should
+      // still be reported, as samples of existing tracks *do* display on the
+      // website!
+      if (error.message.includes(`Didn't match anything`)) {
+        return true;
+      }
+    }
+    */
+
+    return false;
+  }, findFn);
+}
+
 // Warn about references across data which don't match anything.  This involves
 // using the find() functions on all references, setting it to 'error' mode, and
 // collecting everything in a structured logged (which gets logged if there are
@@ -237,7 +301,7 @@ export function filterReferenceErrors(wikiData, {
       sampledTracks: '_trackMainReleasesOnly',
       artTags: '_artTag',
       referencedArtworks: '_artwork',
-      mainReleaseTrack: '_trackMainReleasesOnly',
+      mainRelease: '_mainRelease',
       commentary: '_content',
       creditingSources: '_content',
       referencingSources: '_content',
@@ -346,15 +410,112 @@ export function filterReferenceErrors(wikiData, {
                 };
                 break;
 
+              case '_mainRelease':
+                findFn = ref => {
+                  // Mocking what's going on in `withMainRelease`.
+
+                  if (ref === 'same name single') {
+                    // Accessing the current thing here.
+                    try {
+                      return boundFind.albumSinglesOnly(thing.name, {
+                        fuzz: {
+                          capitalization: true,
+                          kebab: true,
+                        },
+                      });
+                    } catch (caughtError) {
+                      throw new Error(
+                        `Didn't match a single with the same name`,
+                        {cause: caughtError});
+                    }
+                  }
+
+                  let track, trackError;
+                  let album, albumError;
+
+                  try {
+                    track = boundFind.trackMainReleasesOnly(ref);
+                  } catch (caughtError) {
+                    trackError = new Error(
+                      `Didn't match a track`, {cause: caughtError});
+                  }
+
+                  try {
+                    album = boundFind.album(ref);
+                  } catch (caughtError) {
+                    albumError = new Error(
+                      `Didn't match an album`, {cause: caughtError});
+                  }
+
+                  if (track && album) {
+                    if (album.tracks.includes(track)) {
+                      return track;
+                    } else {
+                      throw new Error(
+                        `Unrelated album and track matched for reference "${ref}". Please resolve:\n` +
+                        `- ${inspect(track)}\n` +
+                        `- ${inspect(album)}\n` +
+                        `Returning null for this reference.`);
+                    }
+                  }
+
+                  if (track) {
+                    return track;
+                  }
+
+                  if (album) {
+                    // At this point verification depends on the thing itself,
+                    // which is currently in lexical scope, but if this code
+                    // gets refactored, there might be trouble here...
+
+                    if (thing.mainReleaseTrack === null) {
+                      if (album === thing.album) {
+                        throw new Error(
+                          `Matched album for reference "${ref}":\n` +
+                          `- ` + inspect(album) + `\n` +
+                          `...but this is the album that includes this secondary release, itself.\n` +
+                          `Please resolve by pointing to aonther album here, or by removing this\n` +
+                          `Main Release field, if this track is meant to be the main release.`);
+                      } else {
+                        throw new Error(
+                          `Matched album for reference "${ref}":\n` +
+                          `- ` + inspect(album) + `\n` +
+                          `...but none of its tracks automatically match this secondary release.\n` +
+                          `Please resolve by specifying the track here, instead of the album.`);
+                      }
+                    } else {
+                      return album;
+                    }
+                  }
+
+                  const aggregateCause =
+                    new AggregateError([albumError, trackError]);
+
+                  aggregateCause[Symbol.for('hsmusic.aggregate.translucent')] = true;
+
+                  throw new Error(`Trouble matching "${ref}"`, {
+                    cause: aggregateCause,
+                  });
+                }
+
+                break;
+
               case '_trackArtwork':
                 findFn = ref => boundFind.track(ref.reference);
                 break;
 
               case '_trackMainReleasesOnly':
                 findFn = trackRef => {
-                  const track = boundFind.track(trackRef);
-                  const mainRef = track && CacheableObject.getUpdateValue(track, 'mainReleaseTrack');
+                  let track = boundFind.trackMainReleasesOnly(trackRef, {mode: 'quiet'});
+                  if (track) {
+                    return track;
+                  }
 
+                  // Will error normally, if this can't unambiguously resolve
+                  // or doesn't match any track.
+                  track = boundFind.track(trackRef);
+
+                  const mainRef = CacheableObject.getUpdateValue(track, 'mainRelease');
                   if (mainRef) {
                     // It's possible for the main release to not actually exist, in this case.
                     // It should still be reported since the 'Main Release' field was present.
@@ -385,27 +546,8 @@ export function filterReferenceErrors(wikiData, {
                 break;
             }
 
-            const suppress = fn => conditionallySuppressError(_error => {
-              // We're not suppressing any errors at the moment.
-              // An old suppression is kept below for reference.
-
-              /*
-              if (property === 'sampledTracks') {
-                // Suppress "didn't match anything" errors in particular, just for samples.
-                // In hsmusic-data we have a lot of "stub" sample data which don't have
-                // corresponding tracks yet, so it won't be useful to report such reference
-                // errors until we take the time to address that. But other errors, like
-                // malformed reference strings or miscapitalized existing tracks, should
-                // still be reported, as samples of existing tracks *do* display on the
-                // website!
-                if (error.message.includes(`Didn't match anything`)) {
-                  return true;
-                }
-              }
-              */
-
-              return false;
-            }, fn);
+            findFn = decoSuppressFindErrors(findFn, {property});
+            findFn = decoAnnotateFindErrors(findFn);
 
             const fieldPropertyMessage =
               getFieldPropertyMessage(
@@ -461,10 +603,10 @@ export function filterReferenceErrors(wikiData, {
                   value, {message: errorMessage},
                   decorateErrorWithIndex(refs =>
                     (refs.length === 1
-                      ? suppress(findFn)(refs[0])
+                      ? findFn(refs[0])
                       : filterAggregate(
                           refs, {message: `Errors in entry's artist references`},
-                          decorateErrorWithIndex(suppress(findFn)))
+                          decorateErrorWithIndex(findFn))
                             .aggregate
                             .close())));
 
@@ -476,19 +618,18 @@ export function filterReferenceErrors(wikiData, {
               if (Array.isArray(value)) {
                 newPropertyValue = filter(
                   value, {message: errorMessage},
-                  decorateErrorWithIndex(suppress(findFn)));
+                  decorateErrorWithIndex(findFn));
                 break determineNewPropertyValue;
               }
 
-              nest({message: errorMessage},
-                suppress(({call}) => {
-                  try {
-                    call(findFn, value);
-                  } catch (error) {
-                    newPropertyValue = null;
-                    throw error;
-                  }
-                }));
+              nest({message: errorMessage}, ({call}) => {
+                try {
+                  call(findFn, value);
+                } catch (error) {
+                  newPropertyValue = null;
+                  throw error;
+                }
+              });
             }
 
             if (writeProperty) {
@@ -512,7 +653,11 @@ export class ContentNodeError extends Error {
     message,
   }) {
     const headingLine =
-      `(${where}) ${message}`;
+      (message.includes('\n\n')
+        ? `(${where})\n\n` + message + '\n'
+     : message.includes('\n')
+        ? `(${where})\n` + message
+        : `(${where}) ${message}`);
 
     const textUpToNode =
       containingLine.slice(0, columnNumber);
@@ -685,6 +830,9 @@ export function reportContentTextErrors(wikiData, {
               findFn = boundFind[spec.find];
               break;
           }
+
+          findFn = decoSuppressFindErrors(findFn, {property: null});
+          findFn = decoAnnotateFindErrors(findFn);
 
           const findRef =
             (replacerKeyImplied
