@@ -189,9 +189,25 @@ export class Track extends Thing {
       }),
     ],
 
-    artistContribs: [
-      inheritContributionListFromMainRelease(),
+    artistTextInLists: [
+      exposeUpdateValueOrContinue({
+        validate: input.value(isContentString),
+      }),
 
+      exposeDependencyOrContinue({
+        dependency: 'artistText',
+      }),
+
+      withPropertyFromAlbum({
+        property: input.value('trackArtistText'),
+      }),
+
+      exposeDependency({
+        dependency: '#album.trackArtistText',
+      }),
+    ],
+
+    artistContribs: [
       withDate(),
 
       withResolvedContribs({
@@ -207,6 +223,10 @@ export class Track extends Thing {
         dependency: '#artistContribs',
         mode: input.value('empty'),
       }),
+
+      // Specifically inherit artist contributions later than artist contribs.
+      // Secondary releases' artists may differ from the main release.
+      inheritContributionListFromMainRelease(),
 
       withPropertyFromAlbum({
         property: input.value('trackArtistContribs'),
@@ -393,6 +413,17 @@ export class Track extends Thing {
 
     // > Update & expose - Referenced tracks
 
+    previousProductionTracks: [
+      inheritFromMainRelease({
+        notFoundValue: input.value([]),
+      }),
+
+      referenceList({
+        class: input.value(Track),
+        find: soupyFind.input('trackMainReleasesOnly'),
+      }),
+    ],
+
     referencedTracks: [
       inheritFromMainRelease({
         notFoundValue: input.value([]),
@@ -563,6 +594,10 @@ export class Track extends Thing {
       }),
     ],
 
+    followingProductionTracks: reverseReferenceList({
+      reverse: soupyReverse.input('tracksWhichAreFollowingProductionsOf'),
+    }),
+
     referencedByTracks: reverseReferenceList({
       reverse: soupyReverse.input('tracksWhichReference'),
     }),
@@ -609,9 +644,8 @@ export class Track extends Thing {
 
       // Credits and contributors
 
-      'Artist Text': {
-        property: 'artistText',
-      },
+      'Artist Text': {property: 'artistText'},
+      'Artist Text In Lists': {property: 'artistTextInLists'},
 
       'Artists': {
         property: 'artistContribs',
@@ -701,6 +735,7 @@ export class Track extends Thing {
 
       // Referenced tracks
 
+      'Previous Productions': {property: 'previousProductionTracks'},
       'Referenced Tracks': {property: 'referencedTracks'},
       'Sampled Tracks': {property: 'sampledTracks'},
 
@@ -764,11 +799,6 @@ export class Track extends Thing {
       {message: `Secondary releases inherit samples from the main one`, fields: [
         'Main Release',
         'Sampled Tracks',
-      ]},
-
-      {message: `Secondary releases inherit artists from the main one`, fields: [
-        'Main Release',
-        'Artists',
       ]},
 
       {message: `Secondary releases inherit contributors from the main one`, fields: [
@@ -911,6 +941,13 @@ export class Track extends Thing {
 
       referencing: track => track.isSecondaryRelease ? [track] : [],
       referenced: track => [track.mainReleaseTrack],
+    },
+
+    tracksWhichAreFollowingProductionsOf: {
+      bindTo: 'trackData',
+
+      referencing: track => track,
+      referenced: track => track.previousProductionTracks,
     },
   };
 

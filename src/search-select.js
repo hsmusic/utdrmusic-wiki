@@ -52,7 +52,7 @@ function prepareArtwork(artwork, thing, {
   return serializeSrc;
 }
 
-function baselineProcess(thing, opts) {
+function baselineProcess(thing, _opts) {
   const fields = {};
 
   fields.primaryName =
@@ -158,8 +158,8 @@ function genericProcess(thing, opts) {
   fields.additionalNames =
     (thing.constructor.hasPropertyDescriptor('additionalNames')
       ? thing.additionalNames.map(entry => entry.name)
-   : thing.constructor.hasPropertyDescriptor('aliasNames')
-      ? thing.aliasNames
+   : thing.constructor.hasPropertyDescriptor('artistAliases')
+      ? thing.artistAliases.map(alias => alias.name)
       : []);
 
   const contribKeys = [

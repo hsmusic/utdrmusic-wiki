@@ -1488,6 +1488,10 @@ li:not(:first-child:last-child) .tooltip:where(:not(.cover-artwork .tooltip)),
   font-size: 0.9em;
 }
 
+.rerelease-tooltip .not-credited-on-first-release {
+  opacity: 0.9;
+}
+
 .content-tooltip-guy .hoverable a {
   text-decoration-color: transparent;
   text-decoration-style: dotted;
@@ -1552,6 +1556,44 @@ li:not(:first-child:last-child) .tooltip:where(:not(.cover-artwork .tooltip)),
   text-decoration-color: #fff9;
   text-decoration-thickness: 1.4px;
   color: #fffb;
+}
+
+pre.content-code {
+  position: relative;
+  white-space: nowrap;
+
+  max-width: calc(100vw - 180px);
+
+  /* Welcome to heck. */
+  font-family: inherit;
+
+  border: 1px dashed var(--primary-color);
+}
+
+pre.content-code span {
+  display: block;
+  overflow-x: scroll;
+  padding: 5px 20px 5px 5px;
+  background: black;
+  color: white;
+}
+
+pre.content-code::before {
+  content: "";
+  display: block;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  box-shadow: -15px 0 24px -8px black inset;
+  pointer-events: none;
+}
+
+pre.content-code code {
+  font-family: "courier new", monospace;
+  font-weight: 800;
+  font-size: 0.8em;
 }
 
 s.spoiler {

@@ -1,5 +1,3 @@
-/* eslint-env browser */
-
 import {filterMultipleArrays, stitchArrays, unique}
   from '../../shared-util/sugar.js';
 
@@ -191,7 +189,7 @@ function expandDetails(target) {
       details.open = true;
     }
   } else if (target.nodeName === 'DETAILS') {
-    details.open = true;
+    target.open = true;
   }
 }
 

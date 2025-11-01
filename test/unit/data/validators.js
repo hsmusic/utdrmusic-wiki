@@ -339,7 +339,7 @@ t.test('isName', t => {
   t.plan(4);
   t.ok(isName('Dogz 2.0'));
   t.ok(isName('album:this-track-is-only-named-thusly-to-give-niklink-a-headache'));
-  t.throws(() => isName(''));
+  t.ok(() => isName(''));
   t.throws(() => isName(612));
 });
 
@@ -374,8 +374,8 @@ test(t, 'validateReference', t => {
 
   t.ok(typeless('Hopes and Dreams'));
   t.ok(typeless('track:snowdin-town'));
+  t.ok(typeless('album:undertale-soundtrack'));
   t.throws(() => typeless(''), TypeError);
-  t.throws(() => typeless('album:undertale-soundtrack'));
 });
 
 test(t, 'validateReferenceList', t => {

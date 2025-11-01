@@ -2,25 +2,26 @@ import {Temporal, toTemporalInstant} from '@js-temporal/polyfill';
 
 import {withAggregate} from '#aggregate';
 import CacheableObject from '#cacheable-object';
-import {logWarn} from '#cli';
 import {input} from '#composite';
 import * as html from '#html';
-import {empty} from '#sugar';
+import {accumulateSum, empty, withEntries} from '#sugar';
 import {isLanguageCode} from '#validators';
 import Thing from '#thing';
+import {languageOptionRegex} from '#wiki-data';
 
 import {
+  externalLinkSpec,
   getExternalLinkStringOfStyleFromDescriptors,
   getExternalLinkStringsFromDescriptors,
   isExternalLinkContext,
-  isExternalLinkSpec,
   isExternalLinkStyle,
 } from '#external-links';
 
-import {exposeConstant} from '#composite/control-flow';
+import {exitWithoutDependency, exposeConstant, exposeDependency}
+  from '#composite/control-flow';
 import {externalFunction, flag, name} from '#composite/wiki-properties';
 
-export const languageOptionRegex = /{(?<name>[A-Z0-9_]+)}/g;
+import {withStrings} from '#composite/things/language';
 
 export class Language extends Thing {
   static [Thing.getPropertyDescriptors] = () => ({
@@ -62,52 +63,17 @@ export class Language extends Thing {
 
     // Mapping of translation keys to values (strings). Generally, don't
     // access this object directly - use methods instead.
-    strings: {
-      flags: {update: true, expose: true},
-      update: {validate: (t) => typeof t === 'object'},
+    strings: [
+      withStrings({
+        from: input.updateValue({
+          validate: t => typeof t === 'object',
+        }),
+      }),
 
-      expose: {
-        dependencies: ['inheritedStrings', 'code'],
-        transform(strings, {inheritedStrings, code}) {
-          if (!strings && !inheritedStrings) return null;
-          if (!inheritedStrings) return strings;
-
-          const validStrings = {
-            ...inheritedStrings,
-            ...strings,
-          };
-
-          const optionsFromTemplate = template =>
-            Array.from(template.matchAll(languageOptionRegex))
-              .map(({groups}) => groups.name);
-
-          for (const [key, providedTemplate] of Object.entries(strings)) {
-            const inheritedTemplate = inheritedStrings[key];
-            if (!inheritedTemplate) continue;
-
-            const providedOptions = optionsFromTemplate(providedTemplate);
-            const inheritedOptions = optionsFromTemplate(inheritedTemplate);
-
-            const missingOptionNames =
-              inheritedOptions.filter(name => !providedOptions.includes(name));
-
-            const misplacedOptionNames =
-              providedOptions.filter(name => !inheritedOptions.includes(name));
-
-            if (!empty(missingOptionNames) || !empty(misplacedOptionNames)) {
-              logWarn`Not using ${code ?? '(no code)'} string ${key}:`;
-              if (!empty(missingOptionNames))
-                logWarn`- Missing options: ${missingOptionNames.join(', ')}`;
-              if (!empty(misplacedOptionNames))
-                logWarn`- Unexpected options: ${misplacedOptionNames.join(', ')}`;
-              validStrings[key] = inheritedStrings[key];
-            }
-          }
-
-          return validStrings;
-        },
-      },
-    },
+      exposeDependency({
+        dependency: '#strings',
+      }),
+    ],
 
     // May be provided to specify "default" strings, generally (but not
     // necessarily) inherited from another Language object.
@@ -115,17 +81,6 @@ export class Language extends Thing {
       flags: {update: true, expose: true},
       update: {validate: (t) => typeof t === 'object'},
     },
-
-    // List of descriptors for providing to external link utilities when using
-    // language.formatExternalLink - refer to #external-links for info.
-    externalLinkSpec: {
-      flags: {update: true, expose: true},
-      update: {validate: isExternalLinkSpec},
-    },
-
-    // Update only
-
-    escapeHTML: externalFunction(),
 
     // Expose only
 
@@ -144,12 +99,14 @@ export class Language extends Thing {
 
     intl_date: this.#intlHelper(Intl.DateTimeFormat, {full: true}),
     intl_dateYear: this.#intlHelper(Intl.DateTimeFormat, {year: 'numeric'}),
+    intl_dateMonthDay: this.#intlHelper(Intl.DateTimeFormat, {month: 'numeric', day: 'numeric'}),
     intl_number: this.#intlHelper(Intl.NumberFormat),
     intl_listConjunction: this.#intlHelper(Intl.ListFormat, {type: 'conjunction'}),
     intl_listDisjunction: this.#intlHelper(Intl.ListFormat, {type: 'disjunction'}),
     intl_listUnit: this.#intlHelper(Intl.ListFormat, {type: 'unit'}),
     intl_pluralCardinal: this.#intlHelper(Intl.PluralRules, {type: 'cardinal'}),
     intl_pluralOrdinal: this.#intlHelper(Intl.PluralRules, {type: 'ordinal'}),
+    intl_wordSegmenter: this.#intlHelper(Intl.Segmenter, {granularity: 'word'}),
 
     validKeys: {
       flags: {expose: true},
@@ -167,19 +124,20 @@ export class Language extends Thing {
     },
 
     // TODO: This currently isn't used. Is it still needed?
-    strings_htmlEscaped: {
-      flags: {expose: true},
-      expose: {
-        dependencies: ['strings', 'inheritedStrings', 'escapeHTML'],
-        compute({strings, inheritedStrings, escapeHTML}) {
-          if (!(strings || inheritedStrings) || !escapeHTML) return null;
-          const allStrings = {...inheritedStrings, ...strings};
-          return Object.fromEntries(
-            Object.entries(allStrings).map(([k, v]) => [k, escapeHTML(v)])
-          );
-        },
+    strings_htmlEscaped: [
+      withStrings(),
+
+      exitWithoutDependency({
+        dependency: '#strings',
+      }),
+
+      {
+        dependencies: ['#strings'],
+        compute: ({'#strings': strings}) =>
+          withEntries(strings, entries => entries
+            .map(([key, value]) => [key, html.escape(value)])),
       },
-    },
+    ],
   });
 
   static #intlHelper (constructor, opts) {
@@ -204,6 +162,15 @@ export class Language extends Thing {
     if (!this[property]) {
       throw new Error(`Intl API ${property} unavailable`);
     }
+  }
+
+  countWords(text) {
+    this.assertIntlAvailable('intl_wordSegmenter');
+
+    const string = html.resolve(text, {normalize: 'plain'});
+    const segments = this.intl_wordSegmenter.segment(string);
+
+    return accumulateSum(segments, segment => segment.isWordLike ? 1 : 0);
   }
 
   getUnitForm(value) {
@@ -387,13 +354,19 @@ export class Language extends Thing {
 
       partInProgress += template.slice(lastIndex, match.index);
 
-      for (const insertionItem of html.smush(insertion).content) {
+      const insertionItems = html.smush(insertion).content;
+      if (insertionItems.length === 1 && typeof insertionItems[0] !== 'string') {
+        // Push the insertion exactly as it is, rather than manipulating.
+        if (partInProgress) outputParts.push(partInProgress);
+        outputParts.push(insertion);
+        partInProgress = '';
+      } else for (const insertionItem of insertionItems) {
         if (typeof insertionItem === 'string') {
           // Join consecutive strings together.
           partInProgress += insertionItem;
         } else {
           // Push the string part in progress, then the insertion as-is.
-          outputParts.push(partInProgress);
+          if (partInProgress) outputParts.push(partInProgress);
           outputParts.push(insertionItem);
           partInProgress = '';
         }
@@ -428,14 +401,9 @@ export class Language extends Thing {
   // html.Tag objects - gets left as-is, preserving the value exactly as it's
   // provided.
   #sanitizeValueForInsertion(value) {
-    const escapeHTML = CacheableObject.getUpdateValue(this, 'escapeHTML');
-    if (!escapeHTML) {
-      throw new Error(`escapeHTML unavailable`);
-    }
-
     switch (typeof value) {
       case 'string':
-        return escapeHTML(value);
+        return html.escape(value);
 
       case 'number':
       case 'boolean':
@@ -510,6 +478,15 @@ export class Language extends Thing {
 
     this.assertIntlAvailable('intl_dateYear');
     return this.intl_dateYear.format(date);
+  }
+
+  formatMonthDay(date) {
+    if (date === null || date === undefined) {
+      return html.blank();
+    }
+
+    this.assertIntlAvailable('intl_dateMonthDay');
+    return this.intl_dateMonthDay.format(date);
   }
 
   formatYearRange(startDate, endDate) {
@@ -690,10 +667,6 @@ export class Language extends Thing {
     style = 'platform',
     context = 'generic',
   } = {}) {
-    if (!this.externalLinkSpec) {
-      throw new TypeError(`externalLinkSpec unavailable`);
-    }
-
     // Null or undefined url is blank content.
     if (url === null || url === undefined) {
       return html.blank();
@@ -702,7 +675,7 @@ export class Language extends Thing {
     isExternalLinkContext(context);
 
     if (style === 'all') {
-      return getExternalLinkStringsFromDescriptors(url, this.externalLinkSpec, {
+      return getExternalLinkStringsFromDescriptors(url, externalLinkSpec, {
         language: this,
         context,
       });
@@ -711,7 +684,7 @@ export class Language extends Thing {
     isExternalLinkStyle(style);
 
     const result =
-      getExternalLinkStringOfStyleFromDescriptors(url, style, this.externalLinkSpec, {
+      getExternalLinkStringOfStyleFromDescriptors(url, style, externalLinkSpec, {
         language: this,
         context,
       });

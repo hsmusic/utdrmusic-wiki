@@ -1,8 +1,17 @@
 export default {
-  relations: (relation, tracks, contextContributions) => ({
+  query: (tracks, contextTrack, _contextContributions) => ({
+    presentedTracks:
+      (contextTrack
+        ? tracks.map(track =>
+            track.otherReleases.find(({album}) => album === contextTrack.album) ??
+            track)
+        : tracks),
+  }),
+
+  relations: (relation, query, _tracks, _contextTrack, contextContributions) => ({
     items:
-      tracks.map(track =>
-        relation('generateTrackListItem', track, contextContributions)),
+      query.presentedTracks
+        .map(track => relation('generateTrackListItem', track, contextContributions)),
   }),
 
   slots: {

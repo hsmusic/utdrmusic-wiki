@@ -60,7 +60,7 @@ export function reportDirectoryErrors(wikiData, {
           : [thing.directory]);
 
       for (const directory of directories) {
-        if (directory === null || directory === undefined) {
+        if (directory === '' || directory === null || directory === undefined) {
           missingDirectoryThings.add(thing);
           continue;
         }
@@ -297,6 +297,7 @@ export function filterReferenceErrors(wikiData, {
       artistContribs: '_contrib',
       contributorContribs: '_contrib',
       coverArtistContribs: '_contrib',
+      previousProductionTracks: '_trackMainReleasesOnly',
       referencedTracks: '_trackMainReleasesOnly',
       sampledTracks: '_trackMainReleasesOnly',
       artTags: '_artTag',

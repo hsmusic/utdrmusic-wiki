@@ -1,5 +1,3 @@
-/* eslint-env browser */
-
 import {getColors} from '../../shared-util/colors.js';
 
 import {cssProp} from '../client-util.js';
@@ -149,7 +147,8 @@ function getImageLinkDetails(imageLink) {
       a.href,
 
     embeddedSrc:
-      img?.src ??
+      img?.src ||
+      img?.currentSrc ||
       a.dataset.embedSrc,
 
     originalFileSize:

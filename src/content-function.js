@@ -2,7 +2,7 @@ import {inspect as nodeInspect} from 'node:util';
 
 import {decorateError} from '#aggregate';
 import {colors, decorateTime, ENABLE_COLOR} from '#cli';
-import {Template} from '#html';
+import {Tag, Template} from '#html';
 import {empty} from '#sugar';
 
 function inspect(value, opts = {}) {
@@ -13,9 +13,9 @@ const DECORATE_TIME = process.env.HSMUSIC_DEBUG_CONTENT_PERF === '1';
 
 export class ContentFunctionSpecError extends Error {}
 
-function optionalDecorateTime(prefix, fn) {
+function optionalDecorateTime(prefix, dependency, fn) {
   if (DECORATE_TIME) {
-    return decorateTime(`${prefix}/${generate.name}`, fn);
+    return decorateTime(`${prefix}/${dependency}`, fn);
   } else {
     return fn;
   }
@@ -45,9 +45,10 @@ export function expectExtraDependencies(spec, boundExtraDependencies) {
 
   generate[contentFunction.identifyingSymbol] = true;
 
+  const dependency = spec.generate.name;
   for (const key of ['sprawl', 'query', 'relations', 'data']) {
     if (spec[key]) {
-      generate[key] = optionalDecorateTime(`sprawl`, spec[key]);
+      generate[key] = optionalDecorateTime(key, dependency, spec[key]);
     }
   }
 
@@ -58,6 +59,8 @@ export function expectExtraDependencies(spec, boundExtraDependencies) {
 }
 
 function prepareWorkingGenerateFunction(spec, boundExtraDependencies) {
+  const dependency = spec.generate.name;
+
   let generate = ([arg1, arg2], ...extraArgs) => {
     if (spec.data && !arg1) {
       throw new Error(`Expected data`);
@@ -81,7 +84,7 @@ function prepareWorkingGenerateFunction(spec, boundExtraDependencies) {
       }
     } catch (caughtError) {
       const error = new Error(
-        `Error generating content for ${spec.generate.name}`,
+        `Error generating content for ${dependency}`,
         {cause: caughtError});
 
       error[Symbol.for(`hsmusic.aggregate.alwaysTrace`)] = true;
@@ -100,13 +103,27 @@ function prepareWorkingGenerateFunction(spec, boundExtraDependencies) {
     }
   };
 
-  generate = optionalDecorateTime(`generate`, generate);
+  generate = (baseGenerate => (...args) => {
+    const result = baseGenerate(...args);
+
+    if (result instanceof Template || result instanceof Tag) {
+      if (Object.hasOwn(result, Symbol.for('hsmusic.content.via'))) {
+        result[Symbol.for('hsmusic.contentFunction.via')].push(dependency);
+      } else {
+        result[Symbol.for('hsmusic.contentFunction.via')] = [dependency];
+      }
+    }
+
+    return result;
+  })(generate);
+
+  generate = optionalDecorateTime(`generate`, dependency, generate);
 
   if (spec.slots) {
     let stationery = null;
     return (...args) => {
       stationery ??= boundExtraDependencies.html.stationery({
-        annotation: generate.name,
+        annotation: dependency,
 
         // These extra slots are for the data and relations (positional) args.
         // No hacks to store them temporarily or otherwise "invisibly" alter
@@ -286,7 +303,7 @@ export const decorateErrorWithRelationStack = (fn, traceStack) =>
   decorateError(fn, caughtError => {
     let cause = caughtError;
 
-    for (const {name, args, traceError} of traceStack.slice().reverse()) {
+    for (const {name, args, traceError} of traceStack.toReversed()) {
       const nameText = colors.green(`"${name}"`);
       const namePart = `Error in relation(${nameText})`;
 

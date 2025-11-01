@@ -463,7 +463,7 @@ export class FieldCombinationError extends Error {
 
     const causeMessage =
       (typeof message === 'function'
-        ? message(filteredFields)
+        ? message(filteredDocument)
      : typeof message === 'string'
         ? message
         : null);
@@ -980,6 +980,30 @@ export function parseLyrics(value, {subdoc, LyricsEntry}) {
   }
 
   return parseContentEntries(LyricsEntry, value, {subdoc});
+}
+
+export function parseArtistAliases(value, {subdoc, Artist}) {
+  return parseArrayEntries(value, item => {
+    const config = {
+      bindInto: 'aliasedArtist',
+      provide: {isAlias: true},
+    };
+
+    if (typeof item === 'string') {
+      return subdoc(Artist, {'Artist': item}, config);
+    } else if (typeof item === 'object' && !Array.isArray(item)) {
+      if (item['Name']) {
+        const clone = {...item};
+        clone['Artist'] = item['Name'];
+        delete clone['Name'];
+        return subdoc(Artist, clone, config);
+      } else {
+        return subdoc(Artist, item, config);
+      }
+    } else {
+      return item;
+    }
+  });
 }
 
 // documentModes: Symbols indicating sets of behavior for loading and processing

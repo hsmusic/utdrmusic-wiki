@@ -2,6 +2,8 @@
 
 import {inspect} from 'node:util';
 
+import striptags from 'striptags';
+
 import {withAggregate} from '#aggregate';
 import {colors} from '#cli';
 import {empty, typeAppearance, unique} from '#sugar';
@@ -36,6 +38,40 @@ export const selfClosingTags = [
   'meta',
   'source',
   'track',
+  'wbr',
+];
+
+// Every element under:
+// https://html.spec.whatwg.org/multipage/text-level-semantics.html
+export const textLevelSemanticTags = [
+  'a',
+  'abbr',
+  'b',
+  'bdi',
+  'bdo',
+  'br',
+  'cite',
+  'code',
+  'data',
+  'dfn',
+  'em',
+  'i',
+  'kbd',
+  'mark',
+  'q',
+  'rp',
+  'rt',
+  'ruby',
+  's',
+  'samp',
+  'small',
+  'span',
+  'strong',
+  'sub',
+  'sup',
+  'time',
+  'u',
+  'var',
   'wbr',
 ];
 
@@ -359,6 +395,22 @@ export function normalize(content) {
   return Tag.normalize(content);
 }
 
+export function escape(string, {attribute = false} = {}) {
+  // https://html.spec.whatwg.org/multipage/parsing.html#escapingString
+
+  string = string
+    .replaceAll('&', '&amp;')
+    .replaceAll('\u00a0', '&nbsp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+
+  if (attribute) {
+    string = string.replaceAll('"', '&quot;');
+  }
+
+  return string;
+}
+
 export class Tag {
   #tagName = '';
   #content = null;
@@ -453,6 +505,7 @@ export class Tag {
 
     this.#content = contentArray;
     this.#content.toString = () => this.#stringifyContent();
+    this.#content.toPlainText = () => this.#plainifyContent();
   }
 
   get content() {
@@ -661,6 +714,10 @@ export class Tag {
         : '\n'));
   }
 
+  toPlainText() {
+    return this.content.toPlainText();
+  }
+
   #getContentJoiner() {
     if (this.joinChildren === undefined) {
       return '\n';
@@ -680,10 +737,7 @@ export class Tag {
 
     const joiner = this.#getContentJoiner();
 
-    let content = '';
     let blockwrapClosers = '';
-
-    let seenSiblingIndependentContent = false;
 
     const chunkwrapSplitter =
       (this.chunkwrap
@@ -695,110 +749,64 @@ export class Tag {
         ? false
         : null);
 
-    let contentItems;
+    const contentItems =
+      (this.chunkwrap
+        ? smush(this).content
+        : this.content);
 
-    determineContentItems: {
-      if (this.chunkwrap) {
-        contentItems = smush(this).content;
-        break determineContentItems;
-      }
+    let content = this.#renderContentItems({
+      from: '',
+      items: contentItems,
 
-      contentItems = this.content;
-    }
+      getItemContent: item => item.toString(),
 
-    for (const [index, item] of contentItems.entries()) {
-      const nonTemplateItem =
-        Template.resolve(item);
+      appendItemContent(content, itemContent, item) {
+        const chunkwrapChunks =
+          (typeof item === 'string' && chunkwrapSplitter
+            ? Array.from(getChunkwrapChunks(itemContent, chunkwrapSplitter))
+            : null);
 
-      if (nonTemplateItem instanceof Tag && nonTemplateItem.imaginarySibling) {
-        seenSiblingIndependentContent = true;
-        continue;
-      }
+        const itemIncludesChunkwrapSplit =
+          (chunkwrapChunks
+            ? chunkwrapChunks.length > 1
+            : null);
 
-      let itemContent;
-      try {
-        itemContent = nonTemplateItem.toString();
-      } catch (caughtError) {
-        const indexPart = colors.yellow(`child #${index + 1}`);
+        if (content) {
+          if (itemIncludesChunkwrapSplit && !seenChunkwrapSplitter) {
+            // The first time we see a chunkwrap splitter, backtrack and wrap
+            // the content *so far* in a chunk. This will be treated just like
+            // any other open chunkwrap, and closed after the first chunk of
+            // this item! (That means the existing content is part of the same
+            // chunk as the first chunk included in this content, which makes
+            // sense, because that first chink is really just more text that
+            // precedes the first split.)
+            content = `<span class="chunkwrap">` + content;
+          }
 
-        const error =
-          new Error(
-            `Error in ${indexPart} ` +
-            `of ${inspect(this, {compact: true})}`,
-            {cause: caughtError});
-
-        if (this.#traceError && !disabledTagTracing) {
-          error[Symbol.for(`hsmusic.aggregate.alwaysTrace`)] = true;
-          error[Symbol.for(`hsmusic.aggregate.traceFrom`)] = this.#traceError;
-
-          error[Symbol.for(`hsmusic.aggregate.unhelpfulTraceLines`)] = [
-            /content-function\.js/,
-            /util\/html\.js/,
-          ];
-
-          error[Symbol.for(`hsmusic.aggregate.helpfulTraceLines`)] = [
-            /content\/dependencies\/(.*\.js:.*(?=\)))/,
-          ];
+          content += joiner;
+        } else if (itemIncludesChunkwrapSplit) {
+          // We've encountered a chunkwrap split before any other content.
+          // This means there's no content to wrap, no existing chunkwrap
+          // to close, and no reason to add a joiner, but we *do* need to
+          // enter a chunkwrap wrapper *now*, so the first chunk of this
+          // item will be properly wrapped.
+          content = `<span class="chunkwrap">`;
         }
 
-        throw error;
-      }
-
-      if (!itemContent) {
-        continue;
-      }
-
-      if (!(nonTemplateItem instanceof Tag) || !nonTemplateItem.onlyIfSiblings) {
-        seenSiblingIndependentContent = true;
-      }
-
-      const chunkwrapChunks =
-        (typeof nonTemplateItem === 'string' && chunkwrapSplitter
-          ? Array.from(getChunkwrapChunks(itemContent, chunkwrapSplitter))
-          : null);
-
-      const itemIncludesChunkwrapSplit =
-        (chunkwrapChunks
-          ? chunkwrapChunks.length > 1
-          : null);
-
-      if (content) {
-        if (itemIncludesChunkwrapSplit && !seenChunkwrapSplitter) {
-          // The first time we see a chunkwrap splitter, backtrack and wrap
-          // the content *so far* in a chunk. This will be treated just like
-          // any other open chunkwrap, and closed after the first chunk of
-          // this item! (That means the existing content is part of the same
-          // chunk as the first chunk included in this content, which makes
-          // sense, because that first chink is really just more text that
-          // precedes the first split.)
-          content = `<span class="chunkwrap">` + content;
+        if (itemIncludesChunkwrapSplit) {
+          seenChunkwrapSplitter = true;
         }
 
-        content += joiner;
-      } else if (itemIncludesChunkwrapSplit) {
-        // We've encountered a chunkwrap split before any other content.
-        // This means there's no content to wrap, no existing chunkwrap
-        // to close, and no reason to add a joiner, but we *do* need to
-        // enter a chunkwrap wrapper *now*, so the first chunk of this
-        // item will be properly wrapped.
-        content = `<span class="chunkwrap">`;
-      }
+        // Blockwraps only apply if they actually contain some content whose
+        // words should be kept together, so it's okay to put them beneath the
+        // itemContent check. They also never apply at the very start of content,
+        // because at that point there aren't any preceding words from which the
+        // blockwrap would differentiate its content.
+        if (item instanceof Tag && item.blockwrap && content) {
+          content += `<span class="blockwrap">`;
+          blockwrapClosers += `</span>`;
+        }
 
-      if (itemIncludesChunkwrapSplit) {
-        seenChunkwrapSplitter = true;
-      }
-
-      // Blockwraps only apply if they actually contain some content whose
-      // words should be kept together, so it's okay to put them beneath the
-      // itemContent check. They also never apply at the very start of content,
-      // because at that point there aren't any preceding words from which the
-      // blockwrap would differentiate its content.
-      if (nonTemplateItem instanceof Tag && nonTemplateItem.blockwrap && content) {
-        content += `<span class="blockwrap">`;
-        blockwrapClosers += `</span>`;
-      }
-
-      appendItemContent: {
         if (itemIncludesChunkwrapSplit) {
           for (const [index, {chunk, following}] of chunkwrapChunks.entries()) {
             if (index === 0) {
@@ -832,17 +840,15 @@ export class Tag {
             }
           }
 
-          break appendItemContent;
+          return content;
         }
 
-        content += itemContent;
-      }
-    }
+        return content += itemContent;
+      },
+    });
 
-    // If we've only seen sibling-dependent content (or just no content),
-    // then the content in total is blank.
-    if (!seenSiblingIndependentContent) {
-      return '';
+    if (!content.length) {
+      return content;
     }
 
     if (chunkwrapSplitter) {
@@ -860,6 +866,130 @@ export class Tag {
     content += blockwrapClosers;
 
     return content;
+  }
+
+  #plainifyContent() {
+    // Doesn't play too nice with transformContent, because that function,
+    // working with the Marked library to process markdown, returns a mix of
+    // raw HTML strings and actual tags - this function only makes nice line
+    // breaks out of actual tags.
+
+    if (this.selfClosing) {
+      return '';
+    }
+
+    let joiner = this.#getContentJoiner();
+
+    if (joiner instanceof Tag && joiner.tagName === 'br') {
+      joiner = '\n';
+    }
+
+    if (joiner === '\n') {
+      joiner = ' ';
+    }
+
+    let content = this.#renderContentItems({
+      from: '',
+      items: this.content,
+
+      getItemContent: item =>
+        (item instanceof Tag
+          ? item.toPlainText()
+          : item.toString()),
+
+      appendItemContent(content, itemContent, item) {
+        if (joiner === ' ') {
+          if (item instanceof Tag && !textLevelSemanticTags.includes(item.tagName)) {
+            content += '\n\n';
+          } else if (!content.endsWith(' ')) {
+            content += ' ';
+          }
+        } else {
+          content += joiner;
+        }
+
+        return content += itemContent;
+      },
+    });
+
+    content =
+      striptags(content)
+        .replaceAll('&#39;', `'`)
+        .replaceAll('&quot;', `"`);
+
+    return content;
+  }
+
+  #renderContentItems(config) {
+    let content = structuredClone(config.from);
+
+    let seenSiblingIndependentContent = false;
+
+    for (const [index, item] of config.items.entries()) {
+      const nonTemplateItem = Template.resolve(item);
+
+      if (nonTemplateItem instanceof Tag && nonTemplateItem.imaginarySibling) {
+        seenSiblingIndependentContent = true;
+        continue;
+      }
+
+      let itemContent;
+      try {
+        itemContent = config.getItemContent(nonTemplateItem);
+      } catch (caughtError) {
+        throw this.#annotateContentItemError(caughtError, index);
+      }
+
+      if (!itemContent) {
+        continue;
+      }
+
+      const previousLength = content.length;
+
+      content = config.appendItemContent(content, itemContent, nonTemplateItem);
+
+      if (content.length === previousLength) {
+        continue;
+      }
+
+      if (!(nonTemplateItem instanceof Tag) || !nonTemplateItem.onlyIfSiblings) {
+        seenSiblingIndependentContent = true;
+      }
+    }
+
+    // If we've only seen sibling-dependent content (or just no content),
+    // then the content in total is blank.
+    if (!seenSiblingIndependentContent) {
+      return config.from;
+    }
+
+    return content;
+  }
+
+  #annotateContentItemError(caughtError, index) {
+    const indexPart = colors.yellow(`child #${index + 1}`);
+
+    const error =
+      new Error(
+        `Error in ${indexPart} ` +
+        `of ${inspect(this, {compact: true})}`,
+        {cause: caughtError});
+
+    if (this.#traceError && !disabledTagTracing) {
+      error[Symbol.for(`hsmusic.aggregate.alwaysTrace`)] = true;
+      error[Symbol.for(`hsmusic.aggregate.traceFrom`)] = this.#traceError;
+
+      error[Symbol.for(`hsmusic.aggregate.unhelpfulTraceLines`)] = [
+        /content-function\.js/,
+        /util\/html\.js/,
+      ];
+
+      error[Symbol.for(`hsmusic.aggregate.helpfulTraceLines`)] = [
+        /content\/dependencies\/(.*\.js:.*(?=\)))/,
+      ];
+    }
+
+    return error;
   }
 
   static normalize(content) {
@@ -1343,7 +1473,7 @@ export class Attributes {
       attributeKeyValues
         .map(([key, value]) => {
           const keyPart = key;
-          const escapedValue = this.#escapeAttributeValue(value);
+          const escapedValue = escape(value.toString(), {attribute: true});
           const valuePart =
             (color
               ? colors.green(`"${escapedValue}"`)
@@ -1417,13 +1547,6 @@ export class Attributes {
       default:
         return value;
     }
-  }
-
-  #escapeAttributeValue(value) {
-    return value
-      .toString()
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&apos;');
   }
 
   static parse(string) {
@@ -1525,6 +1648,8 @@ export function resolve(tagOrTemplate, {
     return Tag.normalize(tagOrTemplate);
   } else if (normalize === 'string') {
     return Tag.normalize(tagOrTemplate).toString();
+  } else if (normalize === 'plain') {
+    return Tag.normalize(tagOrTemplate).toPlainText();
   } else if (normalize) {
     throw new TypeError(`Expected normalize to be 'tag', 'string', or null`);
   } else {
@@ -1571,6 +1696,61 @@ export function smooth(smoothie) {
   }
 
   return tags(helper(smoothie));
+}
+
+export function inside(insidee) {
+  if (insidee instanceof Template) {
+    return inside(Template.resolve(insidee));
+  }
+
+  if (insidee instanceof Tag) {
+    return Array.from(smooth(tags(insidee.content)).content);
+  }
+
+  return [];
+}
+
+export function findInside(insidee, query) {
+  if (typeof query === 'object' && query.slots) {
+    return findInside(insidee, item =>
+      Template.resolveForSlots(item, query.slots, 'null'));
+  }
+
+  if (typeof query === 'object' && query.annotation) {
+    return findInside(insidee, item =>
+      Template.resolveForAnnotation(item, query.annotation, 'null'));
+  }
+
+  if (typeof query === 'object' && query.tag) {
+    return findInside(insidee, item => {
+      const tag = normalize(item);
+      if (tag.tagName === query) {
+        return tag;
+      } else {
+        return null;
+      }
+    });
+  }
+
+  if (typeof query === 'string') {
+    return findInside(insidee, item =>
+      Template.resolveForContentFunction(item, query, 'null'));
+  }
+
+  if (typeof query !== 'function') {
+    throw new Error(`Expected {slots}, {annotation}, or query function`);
+  }
+
+  for (const item of inside(insidee)) {
+    const result = query(item);
+    if (result && result === true) {
+      return item;
+    } else if (result) {
+      return result;
+    }
+  }
+
+  return null;
 }
 
 export function template(description) {
@@ -1984,7 +2164,7 @@ export class Template {
     return content;
   }
 
-  static resolveForSlots(content, slots) {
+  static resolveForSlots(content, slots, without = 'throw') {
     if (!slots || typeof slots !== 'object') {
       throw new Error(
         `Expected slots to be an object or array, ` +
@@ -2007,9 +2187,72 @@ export class Template {
       }
     }
 
-    throw new Error(
-      `Didn't find slots ${inspect(slots, {compact: true})} ` +
-      `resolving ${inspect(tagOrTemplate, {compact: true})}`);
+    if (without === 'throw') {
+      throw new Error(
+        `Didn't find slots ${inspect(slots, {compact: true})} ` +
+        `resolving ${inspect(content, {compact: true})}`);
+    } else {
+      return null;
+    }
+  }
+
+  static resolveForAnnotation(content, annotation, without = 'throw') {
+    if (!annotation || typeof annotation !== 'string') {
+      throw new Error(
+        `Expected annotation to be a string, ` +
+        `got ${typeAppearance(annotation)}`);
+    }
+
+    while (content instanceof Template) {
+      if (content.description.annotation === annotation) {
+        return content;
+      } else {
+        content = content.content;
+      }
+    }
+
+    if (without === 'throw') {
+      throw new Error(
+        `Didn't find annotation ${inspect(annotation, {compact: true})} ` +
+        `resolving ${inspect(content, {compact: true})}`);
+    } else {
+      return null;
+    }
+  }
+
+  static resolveForContentFunction(content, dependency, without = 'throw') {
+    if (!dependency || typeof dependency !== 'string') {
+      throw new Error(
+        `Expected dependency to be a string, ` +
+        `got ${typeAppearance(dependency)}`);
+    }
+
+    const considerContentFunction = () =>
+      (content instanceof Tag || content instanceof Template) &&
+      Object.hasOwn(content, Symbol.for('hsmusic.contentFunction.via')) &&
+      content[Symbol.for('hsmusic.contentFunction.via')].includes(dependency);
+
+    while (content instanceof Template) {
+      if (considerContentFunction()) {
+        return content;
+      } else if (content.description.annotation === dependency) {
+        return content;
+      } else {
+        content = content.content;
+      }
+    }
+
+    if (considerContentFunction()) {
+      return content;
+    }
+
+    if (without === 'throw') {
+      throw new Error(
+        `Didn't find dependency ${inspect(dependency, {compact: true})} ` +
+        `resolving ${inspect(content, {compact: true})}`);
+    } else {
+      return null;
+    }
   }
 
   [inspect.custom]() {
